@@ -2,7 +2,7 @@
     File system.
 
     Copyright 2008-2014 GoodCrypto
-    Last modified: 2014-10-08
+    Last modified: 2014-12-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from syr.log import get_log
-import syr.process, syr.user
+import syr.process, syr.user, syr.utils
 
 log = get_log()
 
@@ -760,6 +760,111 @@ def filemode(st_mode):
         '0': '---'}
     perm = str(oct(st_mode)[-3:])
     return is_dir + ''.join(octal_to_readable.get(x,x) for x in perm)
+    
+@contextmanager
+def restore_file(filename):
+    ''' Context manager restores a file to its previous state. 
+    
+        If the file exists on entry, it is backed up and restored.
+        
+        If the file does not exist on entry and does exists on exit, 
+        it is deleted. 
+    '''
+        
+    exists = os.path.exists(filename)
+    
+    if exists:
+        # we just want the pathname, not the handle
+        # tiny chance of race if someone gets the temp filename
+        handle, backup = tempfile.mkstemp()
+        os.close(handle)
+        log('restore_file() backing up "{}" to "{}"'.format(filename, backup))
+        sh.cp('--archive', filename, backup)
+    else:
+        log('restore_file() not backing up "{}" because does not exist'.format(filename))
+        
+    try:
+        yield
+        
+    finally:
+        if os.path.exists(filename):
+            sh.rm(filename)
+        if exists:
+            log('restore_file() restoring "{}" from "{}"'.format(filename, backup))
+            # restore to original state
+            sh.mv(backup, filename)
+        else:
+            log('restore_file() not restoring "{}" because did not exist'.format(filename))
+            
+def edit_file_in_place(filename, replacements, regexp=False, lines=False):
+    """ Replace text in file. 
+    
+        'replacements' is a dict of {old: new, ...}.
+        Every occurence of each old string is replaced with the 
+        matching new string.
+        
+        If regexp=True, the old string is a regular expression.
+        If lines=True, each line is matched separately.
+        
+        Perserves permissions.
+        
+        >>> # note double backslashes because this is a string within a docstring
+        >>> text = (
+        ...     'browser.search.defaultenginename=Startpage HTTPS\\n' +
+        ...     'browser.search.selectedEngine=Startpage HTTPS\\n' +
+        ...     'browser.startup.homepage=https://tails.boum.org/news/\\n' +
+        ...     'spellchecker.dictionary=en_US')
+        
+        >>> f = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        >>> f.write(text)
+        >>> f.close()
+        
+        >>> HOMEPAGE = 'http://127.0.0.1/'
+        >>> replacements = {
+        ...     'browser.startup.homepage=.*':
+        ...         'browser.startup.homepage={}'.format(HOMEPAGE),
+        ...     }
+        
+        >>> edit_file_in_place(f.name, replacements, regexp=True, lines=True)
+        
+        >>> with open(f.name) as textfile:
+        ...     newtext = textfile.read()
+        >>> assert HOMEPAGE in newtext
+        
+        >>> os.remove(f.name)
+    """
+    
+    # read text
+    mode = os.stat(filename).st_mode
+    with open(filename) as textfile:
+        text = textfile.read()
+    
+    if lines:
+        newtext = []
+        for line in text.split('\n'):
+            newline = syr.utils.replace_strings(line, replacements, regexp)
+            newtext.append(newline)
+        text = '\n'.join(newtext)
+    else:
+        text = syr.utils.replace_strings(text, replacements, regexp)
+    
+    # write text
+    with open(filename, 'w') as textfile:
+        textfile.write(text)
+    os.chmod(filename, mode)
+    assert mode == os.stat(filename).st_mode
+
+def replace_file(filename, content):
+    """ Replace file content.
+    
+        Perserves permissions.
+    """
+    
+    mode = os.stat(filename).st_mode
+    with open(filename, 'w') as f:
+        f.write(content)
+    os.chmod(filename, mode)
+    assert mode == os.stat(filename).st_mode
     
 if __name__ == "__main__":
     import doctest

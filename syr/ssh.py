@@ -2,7 +2,7 @@
     Ssh utilities.
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-09-26
+    Last modified: 2014-11-21
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -11,7 +11,7 @@ from __future__ import print_function
 
 import cStringIO, os, re, sh, sys, time, traceback
 
-import syr.lock, syr.log, syr.process, syr.times
+import syr.lock, syr.log, syr.process, syr.times, syr.user
 log = syr.log.get_log()
 
 class SshException(Exception):
@@ -136,6 +136,8 @@ class SshSession(object):
             self.timeout = timeout
         self.strict_host_key_checking = strict_host_key_checking
         self.password = password
+        
+        self.user = syr.user.whoami()
 
         self.start = syr.times.now()
         self.deadline = self.start + (syr.times.one_second * self.timeout)
@@ -233,7 +235,7 @@ class SshSession(object):
             # if we are prompted for a password, raise an exception
             responses['password:'] = no_password
 
-        env = syr.cli.minimal_env()
+        env = syr.cli.minimal_env(user=self.user)
 
         program = 'ssh'
         all_args = [responses, program] + self.base_args + list(args)

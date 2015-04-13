@@ -2,7 +2,7 @@
     Locked threading.Lock context.
 
     Copyright 2011-2012 GoodCrypto
-    Last modified: 2013-11-11
+    Last modified: 2014-11-13
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -39,6 +39,8 @@ def locked(lock=None, blocking=1):
 @contextmanager
 def system_locked(name):
     ''' Context manager to acquire a system wide lock.
+    
+        !! A port might be a better lock.
     
         'name' is typically '__module__' or '__file__'.
 

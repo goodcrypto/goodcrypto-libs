@@ -2,7 +2,7 @@
     Add a couple of formsets.
 
     Copyright 2012-2014 GoodCrypto
-    Last modified: 2014-06-02
+    Last modified: 2014-11-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -156,29 +156,35 @@ def verify_min_formsets_ok(formset, minimum):
        Adapted from http://code.google.com/p/wadofstuff/source/browse/trunk/python/forms/wadofstuff/django/forms/forms.py
     '''
     completed = 0
-    deleted_forms = formset.deleted_forms
-    total_forms = formset.total_form_count()
-    log('total_forms: %r' % total_forms)
-    for i in range(0, total_forms):
-        form = formset.forms[i]
-        if form not in deleted_forms:
-            if form.cleaned_data:
-                for cleaned_data in form.cleaned_data:
-                    log('cleaned_data: %r' % cleaned_data)
-                    # form has data
-                    if cleaned_data and not len(cleaned_data) <= 0:
-                        completed += 1
-
+    
+    try:
+        deleted_forms = formset.deleted_forms
+        total_forms = formset.total_form_count()
+        log('total_forms: %r' % total_forms)
+        for i in range(0, total_forms):
+            form = formset.forms[i]
+            if form not in deleted_forms:
+                if form.cleaned_data:
+                    for cleaned_data in form.cleaned_data:
+                        log('cleaned_data: %r' % cleaned_data)
+                        # form has data
+                        if cleaned_data and not len(cleaned_data) <= 0:
+                            completed += 1
+    except:
+        log(format_exc())
+        completed = 0
+        
+    try:
+        if formset:
+            name = formset.model._meta.verbose_name.lower()
+        else:
+            name = 'inline form'
+    except:
+        name = 'inline form'
+    
     if completed < minimum:
-        error_message = _(
-                'Requires at least %(minimum)d %(name)s.',
-                'Requires at least %(minimum)d %(plural_name)s.',
-                minimum
-        ) % {
-        'minimum': minimum,
-        'name': formset.model._meta.object_name.lower(),
-        'plural_name': formset.model._meta.verbose_name_plural.lower(),
-        }
+        error_message = 'Requires at least {} {}.'.format(minimum, name)
+        log(error_message)
 
         raise ValidationError(error_message)
 

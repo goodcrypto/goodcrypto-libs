@@ -2,7 +2,7 @@
     User utiltities.
    
     Copyright 2010 GoodCrypto
-    Last modified: 2014-10-08  
+    Last modified: 2014-11-21  
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -26,6 +26,9 @@ def drop_privileges(user):
 
 def whoami():
     ''' Get name of current user.
+    
+        Calling whoami() writes to /var/log/auth.log. To avoid flooding that
+        log, try to cache the result from whoami() when you can.
     
         >>> assert whoami() == pwd.getpwuid(os.geteuid()).pw_name
     '''

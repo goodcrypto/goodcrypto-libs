@@ -6,7 +6,7 @@
     The Commands class issues multiple commands at the command prompt.
     
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2014-09-30
+    Last modified: 2014-12-06
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -153,7 +153,11 @@ class Responder(AbstractCli):
         
         Another advantage over using the sh module directly is that when a 
         command prompts, sh freezes completely silently. Responder logs the 
-        prompt (see "To do" for timeout).  
+        prompt (see "To do" for timeout).
+        
+        You can use Responder to log any unexpected prompts::
+        
+            Responder(response={}, program, ...)
         
         For an advanced Responder example, see syr.ssh.
         
@@ -443,7 +447,7 @@ def run(sh_function, *args, **kwargs):
         
     return result
 
-def minimal_env():
+def minimal_env(user=None):
     ''' 
         Get very minimal, safe chroot env. 
         
@@ -451,18 +455,24 @@ def minimal_env():
         before using it. According to David A. Wheeler, a common cracker's
         technique is to change an environment variable.
         
+        If user is not set, gets the user from syr.user.whoami(). This 
+        can flood /var/log/auth.log, so call with user set when you can.
+        
         >>> env = minimal_env()
         >>> env['PATH']
         '/bin:/usr/bin:/usr/local/bin'
     '''
     
     # import delayed to avoid recursive imports
-    from user import whoami
+    import syr.user
+    
+    if not user:
+        user = syr.user.whoami()
 
     env = {}
     
     # use a minimal path
-    if whoami() == 'root':
+    if user == 'root':
         env['PATH'] = '/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin'
     else:
         env['PATH'] = '/bin:/usr/bin:/usr/local/bin'

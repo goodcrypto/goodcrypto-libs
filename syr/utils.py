@@ -6,7 +6,7 @@
     But you need time to find and change the callers.
 
     Copyright 2009-2014 GoodCrypto
-    Last modified: 2014-10-02
+    Last modified: 2014-12-03
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -835,64 +835,6 @@ def is_class_instance(obj):
     return is_new_style_instance(obj) or is_old_style_instance(obj)
     """
 
-def edit_file_in_place(filename, replacements, regexp=False, lines=False):
-    """ Replace text in file. 
-    
-        'replacements' is a dict of {old: new, ...}.
-        Every occurence of each old string is replaced with the 
-        matching new string.
-        
-        If regexp=True, the old string is a regular expression.
-        If lines=True, each line is matched separately.
-        
-        Perserves permissions.
-        
-        >>> # note double backslashes because this is a string within a docstring
-        >>> text = (
-        ...     'browser.search.defaultenginename=Startpage HTTPS\\n' +
-        ...     'browser.search.selectedEngine=Startpage HTTPS\\n' +
-        ...     'browser.startup.homepage=https://tails.boum.org/news/\\n' +
-        ...     'spellchecker.dictionary=en_US')
-        
-        >>> f = tempfile.NamedTemporaryFile(mode='w', delete=False)
-        >>> f.write(text)
-        >>> f.close()
-        
-        >>> HOMEPAGE = 'http://127.0.0.1/'
-        >>> replacements = {
-        ...     'browser.startup.homepage=.*':
-        ...         'browser.startup.homepage={}'.format(HOMEPAGE),
-        ...     }
-        
-        >>> edit_file_in_place(f.name, replacements, regexp=True, lines=True)
-        
-        >>> with open(f.name) as textfile:
-        ...     newtext = textfile.read()
-        >>> assert HOMEPAGE in newtext
-        
-        >>> os.remove(f.name)
-    """
-    
-    # read text
-    mode = os.stat(filename).st_mode
-    with open(filename) as textfile:
-        text = textfile.read()
-    
-    if lines:
-        newtext = []
-        for line in text.split('\n'):
-            newline = replace_strings(line, replacements, regexp)
-            newtext.append(newline)
-        text = '\n'.join(newtext)
-    else:
-        text = replace_strings(text, replacements, regexp)
-    
-    # write text
-    with open(filename, 'w') as textfile:
-        textfile.write(text)
-    os.chmod(filename, mode)
-    assert mode == os.stat(filename).st_mode
-
 def replace_strings(text, replacements, regexp=False):
     """ Replace text. Returns new text. 
     
@@ -918,19 +860,6 @@ def replace_strings(text, replacements, regexp=False):
         else:
             text = text.replace(old, new)
     return text
-
-
-def replace_file(filename, content):
-    """ Replace file content.
-    
-        Perserves permissions.
-    """
-    
-    mode = os.stat(filename).st_mode
-    with open(filename, 'w') as f:
-        f.write(content)
-    os.chmod(filename, mode)
-    assert mode == os.stat(filename).st_mode
 
 def caller_module_name(ignore=None, syr_utils_valid=False):
     ''' Get the caller's fully qualified module name.
@@ -1031,35 +960,6 @@ def caller_module_name(ignore=None, syr_utils_valid=False):
     
     if _debug_caller_module_name: print('caller_module_name: {}'.format(name)) #DEBUG
     return name
-    
-@contextmanager
-def restore_file(filename):
-    ''' Context manager that backs up filename, and restores it afterward. 
-    '''
-        
-    exists = os.path.exists(filename)
-    
-    if exists:
-        # we just want the pathname
-        handle, backup = tempfile.mkstemp()
-        os.close(handle)
-        log('restore_file() backing up "{}" to "{}"'.format(filename, backup))
-        sh.cp(filename, backup)
-    else:
-        log('restore_file() not backing up "{}" because does not exist'.format(filename))
-        
-    try:
-        yield
-        
-    finally:
-        if exists:
-            log('restore_file() restoring "{}" from "{}"'.format(filename, backup))
-            # restore to original state
-            if os.path.exists(filename):
-                sh.rm(filename)
-            sh.mv(backup, filename)
-        else:
-            log('restore_file() not restoring "{}" because did not exist'.format(filename))
             
 def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=False, raise_exception=False):
     ''' Runs the command.
@@ -1248,6 +1148,25 @@ def dynamically_import_module(name):
 def dynamic_import(name):
     raise MovedPermanentlyException('moved to syr.import')
 
+def randint(min=None, max=None):
+    ''' Get a random int.
+    
+        Only useful when you want the min or max to be the system limit 
+        for an integer. Otherwise use random.randint(). 
+    
+        'min' defaults to system minimum integer.
+        'max' defaults to system maximum integer.
+    '''
+    
+    import sys, random
+    
+    if min is None:
+        min = -(sys.maxint-1)
+    if max is None:
+        max = sys.maxint
+    
+    return random.randint(min, max)
+    
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

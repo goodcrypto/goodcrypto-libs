@@ -24,7 +24,7 @@
             http://www.virtualbox.org/manual/ch08.html
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-10-21
+    Last modified: 2014-12-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -201,33 +201,40 @@ class NetworkAdapter(object):
         self.mode = mode or NetworkAdapter.MODE_NAT
         self.device = 'eth{}'.format(self.number - 1)
         
-    """
     def create_bridged_interface(self, device):
+        ''' UNTESTED. Configure bridged interface,
         
-        assert self.mode == NetworkAdapter.MODE_HOST_ONLY
-        
-        name = name or self.device
-        
-        sh.vboxmanage.modifyvm(
-            self.vm.name,
-            '--bridgeadapter{}'.format(self.number),
-            self.device)
-        sh.vboxmanage.modifyvm(
-            self.vm.name,
-            '--nic{}'.format(self.number),
-            'bridged')
+            'device' is the host network interface to use.
+            Virtualbox uses a host driver to inject and extract packets 
+            directly from the host interface hardware.
             
-        ---- what we want
+            Because bridged networking hijacks the host network hardware,
+            it is a security risk. But there may not be another 
+            way to run some kinds of servers, such as a web server, in
+            a Virtualbox vm.
+        '''
+
+        """ what we want
         VBoxManage modifyvm testMachine --bridgeadapter1 eth0
         
         support@tester:~$ VBoxManage modifyvm testMachine --nic1 bridged
 
         support@tester:~$ VBoxManage showvminfo testMachine | grep "NIC 1"
+        """
         
-    """
+        assert self.mode == NetworkAdapter.MODE_BRIDGED
+        
+        sh.vboxmanage.modifyvm(
+            self.vm.name,
+            '--nic{}'.format(self.number),
+            'bridged')
+        sh.vboxmanage.modifyvm(
+            self.vm.name,
+            '--bridgeadapter{}'.format(self.number),
+            self.device)
             
     def create_host_only_interface(self, name=None, ip=None):
-        ''' Configure host only interface,
+        ''' UNTESTED. Configure host only interface,
         
             'name' is the hostonly config name, and defaults to the device name.
             
@@ -393,8 +400,11 @@ class VirtualMachine(object):
             self.name, 
             '--memory', str(self.memory),
             ]
+        # some defaults
         args.extend([
-            # some defaults
+            # security
+            '--vrde', 'off',
+            '--teleporter', 'off',
             # boot order: dvd/disk
             '--boot1', 'dvd',
             '--boot2', 'disk',

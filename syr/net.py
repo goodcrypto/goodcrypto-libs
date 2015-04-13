@@ -2,7 +2,9 @@
     Net utilities.
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-10-02
+    Last modified: 2014-12-02
+    
+    There is some inconsistency in function naming.
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -32,19 +34,31 @@ def hostaddress():
         syr.net.device_address().
     '''
     
-    by_name = socket.gethostbyname(hostname())
+    try:
+        ip_by_name = socket.gethostbyname(hostname())
     
-    # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
-    in_use = False
-    for interface in interfaces():
-        if by_name == device_address(interface):
-            in_use = True
-    if not in_use:
-        raise Exception(
-            'socket.gethostbyname(hostname()) returned {}, but no interface has that address. Is /etc/hosts wrong?'
-            .format(by_name))
+        # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
+        if not interface_from_ip(ip_by_name):
+            raise Exception(
+                'socket.gethostbyname(hostname()) returned {}, but no interface has that address. Is /etc/hosts wrong?'
+                .format(ip_by_name))
+            
+        result = ip_by_name
+                
+    except socket.gaierror:       
+        log.debug('no address for hostname: {}'.format(hostname()))
         
-    return by_name
+        ip = None
+        for interface in interfaces():
+            if not ip:
+                if interface != 'lo':
+                    ip = device_address(interface)
+        if not ip:
+            raise Exception('no ip address')
+            
+        result = ip
+    
+    return result
     
 def interfaces():
     ''' Get net interfaces. '''
@@ -58,13 +72,38 @@ def device_address(device):
     ip = None
     output = sh.ifconfig(device).stdout
     for line in output.split('\n'):
-        m = re.match(r'.*inet addr:(\d+.\d+.\d+.\d+)', line)
+        m = re.match(r'.*inet addr:(\d+\.\d+\.\d+\.\d+)', line)
         if m:
             ip = m.group(1)
             log.debug('ip: {}'.format(ip))
             
     return ip
+    
+def mac_address(device):
+    ''' Get device mac address '''
+    
+    mac = None
+    output = sh.ifconfig(device).stdout
+    for line in output.split('\n'):
+        if not mac:
+            m = re.match(r'.* HWaddr +(..:..:..:..:..:..)', line)
+            if m:
+                mac = m.group(1)
+                log.debug('mac: {}'.format(mac))
             
+    return mac
+    
+def interface_from_ip(ip):
+    ''' Find interface using ip address '''
+    
+    interface_found = None
+    for interface in interfaces():
+        if not interface_found:
+            if ip == device_address(interface):
+                interface_found = interface
+        
+    return interface_found
+    
 def set_etc_hosts_address(hostname, ip):
     ''' Set host address in /etc/hosts from device address. '''
     
@@ -174,7 +213,12 @@ def send_api_request(url, params):
     return body_text
 
 def post_data(full_url, params):
-    '''Send a post to a url and return the data.'''
+    '''
+        Send a post to a url and return the data.
+        
+        >>> page = post_data('https://goodcrypto.com', '')
+        >>> page
+    '''
     
     page = None
 
@@ -183,8 +227,15 @@ def post_data(full_url, params):
         request = urllib2.Request(full_url, urlencode(params))
         handle = opener.open(request)
         page = handle.read()
-            
+
+    except urllib2.HTTPError as http_error:
+        page = None
+        log(format_exc())
+        log('full_url: {}'.format(full_url))
+        log('http error: {}'.format(str(http_error)))
+        
     except:
+        page = None
         log(format_exc())
         log('full_url: {}'.format(full_url))
 

@@ -2,7 +2,7 @@
     Django assets for reinhardt.
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-01-13
+    Last modified: 2014-11-20
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -21,7 +21,7 @@ admin_js = Bundle('js/jquery.ui.core.js', 'js/jquery.ui.widget.js',
 register('admin_js', admin_js)
 
 
-bootstrap_css = Bundle('css/bootstrap.css', 'css/reinhardt.bootstrap.css',  'css/admin.css',
+bootstrap_css = Bundle('css/bootstrap.css', 'css/reinhardt.bootstrap.css', 
                         filters='yui_css', output='css/bootstrap_css.css')
 register('bootstrap_css', bootstrap_css)
 

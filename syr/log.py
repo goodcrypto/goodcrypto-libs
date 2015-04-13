@@ -44,7 +44,7 @@ from __future__ import print_function
         Log.info() can write to more than one log.
 
     Copyright 2008-2014 GoodCrypto
-    Last modified: 2014-09-22
+    Last modified: 2014-11-21
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -272,6 +272,7 @@ class _Log(object):
         self.dirname = os.path.dirname(self.pathname)
 
         self.group = group
+        self.user = whoami()
 
         self.recreate = recreate
         if recreate and os.path.exists(self.pathname):
@@ -346,9 +347,9 @@ class _Log(object):
                 print(message)
             if _use_master_log and not self.is_master():
                 try:
-                    _master_logs[whoami()]._write('- %s - %s' % (self.filename, message))
+                    _master_logs[self.user]._write('- %s - %s' % (self.filename, message))
                 except UnicodeDecodeError:
-                    _master_logs[whoami()]._write('- %s - !! Unable to log message -- UnicodeDecodeError !!' % (self.filename))
+                    _master_logs[self.user]._write('- %s - !! Unable to log message -- UnicodeDecodeError !!' % (self.filename))
 
         except:
 
@@ -482,7 +483,7 @@ class _Log(object):
             """
             try:
                 # why doesn't this error show in the logs?
-                os.chgrp(pathname, whoami())
+                os.chgrp(pathname, self.user)
             except:
                 self.last_exception()
             """
@@ -497,10 +498,10 @@ class _Log(object):
 
     def is_master(self):
 
-        if whoami() not in _master_logs:
-            _master_logs[whoami()] = get_log('master.log', dirname=self.dirname)
+        if self.user not in _master_logs:
+            _master_logs[self.user] = get_log('master.log', dirname=self.dirname)
 
-        return self == _master_logs[whoami()]
+        return self == _master_logs[self.user]
 
     def last_exception(self, message=None):
         ''' Try to notify of last exception. '''

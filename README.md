@@ -1,6 +1,6 @@
 #goodcrypto_libs - GoodCrypto Libs
 
-Utility libraries.
+General utility libraries.
 
 
 ##Introduction
