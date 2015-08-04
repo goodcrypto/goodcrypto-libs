@@ -17,8 +17,8 @@
       * Pipe Fitting with Python Generators
         http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
 
-    Portions Copyright 2012-2014 GoodCrypto
-    Last modified: 2014-07-10
+    Portions Copyright 2012-2015 GoodCrypto
+    Last modified: 2015-01-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -26,7 +26,8 @@
 from itertools import imap
 from Queue import Queue
 
-from syr.utils import last_exception, last_exception_only, object_name, synchronized
+from syr.python import object_name
+from syr.utils import last_exception, last_exception_only, synchronized
 from syr.iter import iter
 from syr.log import get_log
         

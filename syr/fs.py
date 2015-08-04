@@ -2,7 +2,7 @@
     File system.
 
     Copyright 2008-2014 GoodCrypto
-    Last modified: 2014-12-04
+    Last modified: 2015-01-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -208,8 +208,9 @@ def temp_mount(*args, **kwargs):
         disabled>>> # how do we ignore the <BLANKLINE> from sh.touch()? And why do we get it?
         disabled>>> x = sh.touch(t)
         disabled>>> assert os.path.exists(t)
-        disabled>>> with mount(d, d2, bind=True):
-        ...     assert os.path.exists(t2)
+        disabled>>> with temp_mount('--bind', d, d2):
+        disabled>>> # with temp_mount(d, d2, bind=True):
+        disabled...     assert os.path.exists(t2)
         disabled>>> assert not os.path.exists(t2)
     '''
 
@@ -693,7 +694,7 @@ def remove(path):
     if os.path.exists(path):
 
         if empty_dir is None:
-            empty_dir = tempfile.mkdtemp(prefix='dbuild.empty.')
+            empty_dir = tempfile.mkdtemp(prefix='syr.fs.empty.')
 
         if os.path.ismount(path):
             raise ValueError('path is mount point: {}'.format(path))

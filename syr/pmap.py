@@ -1,8 +1,8 @@
 '''
     Threaded map().
 
-    Copyright 2010-2012 GoodCrypto
-    Last modified: 2014-01-08
+    Copyright 2010-2015 GoodCrypto
+    Last modified: 2015-01-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -11,9 +11,9 @@
 
 import __builtin__, sys, threading, time
 
-from syr.utils import object_name
 from syr.log import get_log
 from syr.lock import locked
+from syr.python import object_name
 
 log = get_log()
 

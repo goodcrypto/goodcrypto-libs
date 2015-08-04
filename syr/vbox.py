@@ -24,7 +24,7 @@
             http://www.virtualbox.org/manual/ch08.html
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-12-04
+    Last modified: 2014-12-27
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -287,6 +287,14 @@ class NetworkAdapter(object):
             Syntax:
                 --natpf<1-N> [<name>],tcp|udp,[<hostip>],<hostport>,[<guestip>], <guestport>)
         '''
+        
+        # Only root can open ports < 1024. Virtualbox silently fails to 
+        # open a privileged port if the user isn't root.
+        user = syr.user.whoami()
+        if host_port < 1024 and user != 'root':
+            raise VboxException(
+                'Tried to open privileged port {} as nonroot user {}'.
+                format(host_port, user))
         
         log.debug('forward port: {} from host {} to guest {}'.
             format(self.vm.name, host_port, guest_port))

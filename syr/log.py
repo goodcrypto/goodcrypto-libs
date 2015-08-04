@@ -44,7 +44,7 @@ from __future__ import print_function
         Log.info() can write to more than one log.
 
     Copyright 2008-2014 GoodCrypto
-    Last modified: 2014-11-21
+    Last modified: 2015-01-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -341,6 +341,7 @@ class _Log(object):
 
         try:
 
+            message = self.no_control_chars(message)
             self._write(message)
 
             if self.noisy:
@@ -523,7 +524,18 @@ class _Log(object):
             self.write(last_exception())
         except:
             pass
-            
+        
+    def no_control_chars(self, text):
+        ''' Replace control characters other than '\t', '\n' and '\r' 
+            with '?'. 
+        '''
+        
+        newtext = ''
+        for ch in str(text):
+            if ch < ' ' and ch != '\t' and ch != '\n' and ch != '\r':
+                ch = '?'
+            newtext = newtext + ch
+        return newtext
 
 def get_log(filename=None, dirname=None, group=None, recreate=False):
     ''' Returns an instance of _Log().
@@ -599,7 +611,7 @@ def get_log_path(filename=None, dirname=None):
     _debug('get_log(filename={}, dirname={})'.format(filename, dirname)) #DEBUG
 
     if filename is None:
-        from syr.utils import caller_module_name
+        from syr.python import caller_module_name
         filename = caller_module_name(ignore=[__file__])
         _debug('filename defaulted: {}'.format(filename)) #DEBUG
 

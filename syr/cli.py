@@ -6,7 +6,7 @@
     The Commands class issues multiple commands at the command prompt.
     
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2014-12-06
+    Last modified: 2014-12-22
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -159,7 +159,7 @@ class Responder(AbstractCli):
         
             Responder(response={}, program, ...)
         
-        For an advanced Responder example, see syr.ssh.
+        For an advanced Responder example, see jean.ssh.
         
         To do:
             Add two prompt timeouts like the line timeout.
@@ -232,9 +232,9 @@ class Responder(AbstractCli):
     
         # sh does not propagate exceptions from an _out function, so...
         self.exc_info = None
-        self.result = command(
-            _out=self.interact, _out_bufsize=0, _tty_in=True,
-            *args, **kwargs)
+        kwargs.update(
+            dict(_out=self.interact, _out_bufsize=0, _tty_in=True,))
+        self.result = command(*args, **kwargs)
         try:
             self.result.wait()
         except sh.SignalException_9:

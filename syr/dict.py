@@ -1,8 +1,8 @@
 '''
     Dict utilities.
 
-    Copyright 2013 GoodCrypto
-    Last modified: 2014-01-08
+    Copyright 2013-2015 GoodCrypto
+    Last modified: 2015-01-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -11,7 +11,8 @@ import collections, datetime, types
 
 from syr.format import pretty
 from syr.log import get_log
-from syr.utils import is_class_instance, last_exception, object_name, prefered_encoding, stacktrace
+from syr.python import object_name
+from syr.utils import is_class_instance, last_exception, prefered_encoding, stacktrace
 
 global_debug = False
 log = get_log()
