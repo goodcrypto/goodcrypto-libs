@@ -1,0 +1,107 @@
+{% extends "reinhardt/base_content.html" %}
+{% comment %}
+
+    Copyright (c) 2009-2014 GoodCrypto
+    Last modified: 2014-01-13
+        
+{% endcomment %}
+{% load i18n custom %}
+
+{% block titlevar %} 
+    {% trans 'Sign in' %}
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    {% include 'reinhardt/snippets/css_basic.html' %}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% include 'reinhardt/snippets/js_basic.html' %}
+    <script type="text/javascript" src="{% static 'js/admin_js.js' %}"></script>
+{% endblock extrahead %}
+
+{% block bodyclass %}login{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block body-content %}
+    {% block content %}
+    <div class="col-md-1">&nbsp;</div>
+    <div class="col-md-10">
+        <h3>
+        <br/>
+        {% block signin_headline %}
+        {% include 'snippets/sign_in_tag.html' %}
+        {% endblock signin_headline %}
+        </h3>
+      
+        <div class="row">
+            <div class="col-md-5">
+                {% include 'reinhardt/snippets/form_error_handling.html' %}
+                
+                <div id="content-main">
+                <form action="/sign_in/" method="post" id="login-form" class="well form-inline">
+                    {% csrf_token %}        
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="id_username" class="required">{% trans 'Email:' %}</label>
+                        </div> 
+                        <div class="col-md-9">
+                            <div class="input-xlarge">
+                                {{ form.username }}
+                            </div>
+                            {% if not form.this_is_the_login_form.errors %}
+                            <span class="alert-error">{{ form.username.errors }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="id_password" class="required">{% trans 'Password:' %}</label>
+                        </div> 
+                        <div class="col-md-9">
+                            <div class="input-xlarge">
+                                {{ form.password }}
+                            </div>
+                            {% if not form.this_is_the_login_form.errors %}
+                            <span class="alert-error">{{ form.password.errors }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="this_is_the_login_form" value="1" />
+                    <input type="hidden" name="next" value="{{ next }}" />
+                    
+                    {% block signin_button %}
+                    <div class="row">
+                        <div class="col-md-3">&nbsp;</div>
+                        <div class="col-md-2">
+                            <input 
+                                type="submit" 
+                                class="btn btn-primary btn-large" 
+                                value="{% trans 'Sign in' %}"
+                                name="_signin" 
+                                alt="{% trans 'Sign in' %}" 
+                                title="{% trans 'Use the credentials emailed when you purchased your account.' %}"/>
+                        </div> 
+                    </div>
+                    {% endblock signin_button %}
+                </form>
+                </div>
+            </div>
+        </div>
+        
+        <script type="text/javascript">
+        document.getElementById('id_username').focus()
+        </script>
+        </div>
+    </div>
+    {% endblock content %}
+{% endblock body-content %}
+

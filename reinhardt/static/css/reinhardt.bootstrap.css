@@ -1,0 +1,44 @@
+/* -------------------------------------------------------------- 
+   
+   GoodCrypto custom overrides for twitter bootstrap css rules.
+
+   Last modified: 2013-11-11
+   
+-------------------------------------------------------------- */
+
+
+/* Drop cap for the first letter of text. 
+   This is called a drop cap even when it doesn't drop. */
+.dropcap:first-letter {
+    font-size: 200%;
+}
+
+/* Remove abbr dotted underline */
+abbr[title] {
+    border-bottom: none;
+    text-decoration: none;
+}
+
+/* Bootstrap .collapse conflicts with django admin .collapse */
+.collapse {
+    height:auto;
+    /*
+    overflow:hidden;
+    position:relative;
+    */
+}
+
+/* override django admin's settings for the navbar */
+#header a:link, #header a:visited {
+    color: #555555;
+}
+#header a:hover {
+    text-decoration: underline;
+}
+/* admin won't let us override user-tools so we're going to hide them */
+#user-tools {
+    color: #555555;
+    font-size: 5px;
+    text-align: right;
+}
+
