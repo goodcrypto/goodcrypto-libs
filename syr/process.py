@@ -5,7 +5,7 @@
     command line programs are more likely to have been thoroughly vetted.
 
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2014-09-30
+    Last modified: 2015-02-11
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -33,9 +33,10 @@ def pid_from_port(port):
     if pids:
         assert len(pids) == 1, 'pids: {}'.format(pids)
         pid = pids[0]
+        result = int(pid)
     else:
-        pid = None
-    return int(pid)
+        result = None
+    return result
 
 def pids_from_file(path):
     ''' Get list of pids that have the file or dir open.

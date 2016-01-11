@@ -24,7 +24,7 @@
             http://www.virtualbox.org/manual/ch08.html
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-12-27
+    Last modified: 2015-01-15
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -72,7 +72,22 @@ def vbox(*args, **kwargs):
     return result
     
 class Storage(object):
-    ''' Virtualbox storage device. '''
+    ''' Virtualbox storage device. 
+    
+        To do:
+        
+            "closemedium ... --delete" from /root/bin/m.
+            
+                'closemedium' seems to be equivalent to the gui's 'release'.
+                '--delete' seems to be equivalent to the gui's 'remove'.
+                
+            Example::
+                vboxmanage closemedium disk $VDI_FILE --delete
+
+createhd
+Example:
+    vboxmanage createhd --filename $VDI_FILE --size $SIZE_IN_MB
+    '''
     
     DEVICE_NAME = 'SATA Controller'
     DEVICE_TYPE = 'sata'

@@ -2,7 +2,7 @@
     Django url patterns.
 
     Copyright 2009-2013 GoodCrypto
-    Last modified: 2013-11-21
+    Last modified: 2015-02-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''

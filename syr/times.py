@@ -5,8 +5,8 @@
     
     Todo: Provide a way to make UTC or other timezone the default.
    
-    Copyright 2009-2013 GoodCrypto
-    Last modified: 2014-08-08
+    Copyright 2009-2015 GoodCrypto
+    Last modified: 2015-01-27
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -110,7 +110,7 @@ def format_date(date=None):
     return time.strftime('%Y-%m-%d', date)
 
 def timedelta_to_human_readable(td, verbose=True):
-    ''' Converts a timedelta to a human readable form.
+    ''' Formats a timedelta in a human readable form.
     
         If total time is less than a second then shows milliseconds 
         instead of microseconds, else rounds to the nearest second.
@@ -168,7 +168,6 @@ def timedelta_to_human_readable(td, verbose=True):
             if len(tdString) > 0:
                 tdString = tdString + ', '
             tdString = tdString + str(secondsLeft) + ' second' + s_if_plural(secondsLeft)
-
 
     else:
         # !!!!! python 3
@@ -432,6 +431,31 @@ class elapsed_time(object):
         else:
             result = now() - self.start
         return result
+
+def date_string_to_date(date_string):
+    ''' Convert a string representation of a date into a python date.
+
+        >>> date_string_to_date('2015-01-14')
+        datetime.date(2015, 1, 14)
+        >>> date_string_to_date('14-01-2015')
+        datetime.date(2015, 1, 14)
+        >>> date_string_to_date('test')
+    '''
+    
+    Date_Format1 = '(\d{4})-(\d{2})-(\d{2})'
+    Date_Format2 = '(\d{2})-(\d{2})-(\d{4})' # the European alternative
+    
+    d = None
+    m = re.match(Date_Format1, date_string)
+    if m:
+        d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    else:
+        m = re.match(Date_Format2, date_string)
+        if m:
+            d = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        
+    return d
+
 
 today = now()
 tomorrow = today + one_day

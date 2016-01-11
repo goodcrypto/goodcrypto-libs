@@ -1,11 +1,13 @@
 '''
     Statistics
     
+    The pypi stats module is only for Python 3.1.
+    
     This used to be named stat.py. It was renamed to avoid conflict 
     with the standard library named stat.
 
     Copyright 2010-2013 GoodCrypto
-    Last modified: 2014-07-10
+    Last modified: 2015-02-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -32,7 +34,7 @@ def mean(values):
         nan
     '''
 
-    return numpy.array(values).mean()
+    return numpy.array(_list(values)).mean()
 
 def median(values):
     ''' Median of an iterable.
@@ -56,15 +58,7 @@ def median(values):
         2.0
     '''
 
-    # numpy.lib.median() seems to have trouble with generators
-    try:
-        values = list(values)
-    except TypeError:
-        # numpy would handle this if we hadn't explicitly used list()
-        values = [values]
-        
-    # numpy.lib.median() assumes already sorted
-    values = sorted(values)
+    values = sorted(_list(values))
     
     return numpy.lib.median(numpy.array(values))
 
@@ -74,9 +68,10 @@ def is_significant(a, b):
 
         A difference may be staticially significant, but still not
         be significant. For example, if everyone in all groups in a
-        split test hits the conversion, the difference between
-        converted and not converted is staticially significant, but
-        there is no difference between the groups. '''
+        split test converts, the difference between converted and 
+        not converted is staticially significant, but the result is 
+        not siginificant because there is no difference between the 
+        groups. '''
 
     return (
         a + b > 0 and
@@ -192,6 +187,14 @@ def bin(kv, bins=5):
     return scaled_values
     '''
          
+def _list(values):
+    # numpy.lib.mean()/median() seem to have trouble with generators
+    try:
+        values = list(values)
+    except TypeError:
+        # numpy would handle this if we hadn't explicitly used list()
+        values = [values]
+    return values
 
 if __name__ == "__main__":
 

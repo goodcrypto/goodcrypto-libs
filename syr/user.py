@@ -1,8 +1,8 @@
 '''
-    User utiltities.
+    User utilities.
    
     Copyright 2010 GoodCrypto
-    Last modified: 2014-11-21  
+    Last modified: 2015-01-25  
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''

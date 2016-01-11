@@ -12,7 +12,7 @@
     preference. 
     
     Copyright 2014 GoodCrypto.
-    Last modified: 2014-10-23
+    Last modified: 2015-01-26
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
     
@@ -87,7 +87,13 @@ from syr.times import elapsed_time
 from syr.utils import last_exception, NotImplementedException
 
 log = get_log()
-
+                        
+def json_date_handler(obj):
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat() 
+    else:
+        return obj
+    
 # jsonpickle can't decode a class defined in the doctest
 class _Test(object):
     a = 1
@@ -294,16 +300,16 @@ class Dictify(AbstractSerializer):
     def encode(self, obj, json_compatible=False):
         ''' Encode object to serialized form '''
         
-        log('Dictify.encode obj: %s' % obj)
+        #log('Dictify.encode obj: %s' % obj)
         with elapsed_time() as et:
             encoded = dictify(obj, deep=True, json_compatible=json_compatible)
-            log('Dictify.encode encoded: %s' % encoded)
+            #log('Dictify.encode encoded: %s' % encoded)
         log('Dictify.encode elapsed time: %s' % et.timedelta())
         with tempfile.NamedTemporaryFile( #DEBUG
             prefix='dictify_serializer.', suffix='.dict', delete=False #DEBUG
             ) as debug_store: #DEBUG
             pretty_encoded = pretty(encoded, indent=4)
-            log('Dictify.encode pretty_encoded: %s' % pretty_encoded)
+            # log('Dictify.encode pretty_encoded: %s' % pretty_encoded)
             debug_store.write(pretty_encoded) #DEBUG
             os.chmod(debug_store.name, 0664) #DEBUG
             log('Dictify.encode saved to %s' % debug_store.name) #DEBUG
@@ -415,9 +421,9 @@ class JsonWithDictify(Json):
         
         with elapsed_time() as et:
             dictified = Dictify().encode(obj, json_compatible=True)
-            log('JsonWithDictify.encode dictified: %s' % dictified)
+            # log('JsonWithDictify.encode dictified: %s' % dictified)
             encoded = Json().encode(dictified)
-            log('JsonWithDictify.encode encoded: %s' % encoded)
+            # log('JsonWithDictify.encode encoded: %s' % encoded)
         log('JsonWithDictify.encode elapsed time: %s' % et.timedelta())
         return encoded
     
@@ -425,7 +431,7 @@ class JsonWithDictify(Json):
         ''' Write object to open file.  '''
         
         encoded = self.encode(obj)
-        log('JsonWithDictify.write encoded: %s' % encoded)
+        # log('JsonWithDictify.write encoded: %s' % encoded)
         openfile.write(encoded)
             
         

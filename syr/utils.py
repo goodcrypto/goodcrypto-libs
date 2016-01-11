@@ -6,7 +6,7 @@
     But you need time to find and change the callers.
 
     Copyright 2009-2014 GoodCrypto
-    Last modified: 2015-01-04
+    Last modified: 2015-01-17
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -564,7 +564,7 @@ class textfile(object):
     
     def __init__(self, filename, rwmode='r'):
         if filename.endswith('.gz'):
-            self.f = gzip.open(filename, '%sb' % rwmode)
+            self.f = gz.open(filename, '%sb' % rwmode)
         elif filename.endswith('.bz2'):
             self.f = bz2.BZ2File(filename, '%sb' % rwmode)
         elif filename.endswith('.zip'):

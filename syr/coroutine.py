@@ -18,7 +18,7 @@
         http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
 
     Portions Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-01-04
+    Last modified: 2015-01-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -61,6 +61,7 @@ def pipe(source, *pumps):
                 pipeline = pump(pipeline)
             return pipeline
 
+        See Pump.build_pipeline().
 
         See Pipe Fitting with Python Generators
             http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
@@ -240,6 +241,8 @@ class Pump(object):
         ''' Initial one time setup.
         
             Do most of the things you'd ordinarily do in __init__ here.
+            This function gets all the __init__() args except for the first,
+            which is an iterable of items into the Pump.
 
             The input iterable is available as self.source. Other positional and
             keyword instantiation arguments are passed as *args and **kwargs. '''

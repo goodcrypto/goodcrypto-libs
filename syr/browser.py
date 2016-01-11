@@ -2,14 +2,15 @@
 '''
     Browser utilities.
     
-    Copyright 2012-2013 GoodCrypto
-    Last modified: 2014-01-08
+    Copyright 2012-2015 GoodCrypto
+    Last modified: 2015-02-13
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 import re
 from syr.log import get_log
+from traceback import format_exc
 
 log = get_log()
 
@@ -149,172 +150,173 @@ def is_primitive_browser(request):
           
 
 def is_known_bot(browser, other):
-    ''' Returns True if this access is from a known bot. '''
+    ''' Returns True if this access is from a known bot. 
     
-    def explicitly_accepted():
-        accepted = False
-        try:
-            from jean import agent_accepted
-            accepted = agent_accepted(browser)
-        except:
-            pass
-        
-        return accepted
+        >>> is_known_bot('curl', 'agent: curl/7.26.0')
+        True
+        >>> is_known_bot('Mozilla', '(compatible; Googlebot/2.1; +http://www.google.com/bot.html) agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html')
+        True
+        >>> is_known_bot('', '')
+        False
+    '''
+    
+    try:
+        browser_lc = browser.lower()
+        other_lc = other.lower()
+    
+        known_bot = (
+            ('mozilla' in browser_lc and len(other) <= 0) or # fake mozilla
+            browser_lc.startswith('java') or         # language lib
+            'bot' in browser_lc or           # bot
+            'bot' in other_lc or
+            'spider' in browser_lc or        # spider
+            'spider' in other_lc or
+            'baidu' in browser_lc or         # BaiduSpider
+            'baidu' in other_lc or
+            'walker' in browser_lc or        # walker
+            'walker' in other_lc or
+            'crawl' in browser_lc or         # crawl
+            'crawl' in other_lc or
+            'python-urllib' in browser_lc or
+            'libwww-perl' in browser_lc or
+            'yahoo' in browser_lc or         # Yahoo
+            'slurp' in browser_lc or         # slurp
+            'slurp' in other_lc or
+            'curl' in browser_lc or          # curl
+            'python' in browser_lc or        # python
+            'perl' in browser_lc or          # perl
+            'nambu' in browser_lc or         # nambu
+            'docomo' in browser_lc or        # DoCoMo
+            'digext' in browser_lc or        # DigExt
+            'morfeus' in browser_lc or       # Morfeus
+            'twitt' in browser_lc or         # twitt
+            'sphere' in browser_lc or        # sphere
+            'pear' in browser_lc or          # PEAR
+            'wordpress' in browser_lc or     # wordpress
+            'radian' in browser_lc or        # radian
+            'eventbox' in browser_lc or      # eventbox
+            'monitor' in browser_lc or       # monitor
+            'mechanize' in browser_lc or     # mechanize
+            'facebookexternal' in browser_lc or # facebookexternal
+            'scoutjet' in other_lc or        # Scoutjet
+            'yandex' in browser_lc or        # Yandex
+            'yandex' in other_lc or
+            'archiver' in browser_lc or      # Archiver
+            'ia_archiver' in browser_lc or   # Alexa
+            'qqdownload' in other_lc or      # QQ
+            'ask jeeves' in other_lc         # Ask Jeeves 
+            )
+    except:
+        known_bot = False
+        log(format_exc())
 
-    browser_lc = browser.lower()
-    other_lc = other.lower()
-    return (
-        
-        not explicitly_accepted() and  
-        
-        (len(browser) <= 0 or
-         len(other) <= 0 or                       # essential in some form, may filter out too much
-         (browser_lc == 'mozilla' and len(other) <= 0) or # fake mozilla
-         browser_lc.find('bot') >= 0 or           # bot
-         other_lc.find('bot') >= 0 or
-         browser_lc.find('spider') >= 0 or        # spider
-         other_lc.find('spider') >= 0 or
-         browser_lc.find('baidu') >= 0 or         # BaiduSpider
-         other_lc.find('baidu') >= 0 or
-         browser_lc.find('walker') >= 0 or        # walker
-         other_lc.find('walker') >= 0 or
-         browser_lc.find('crawl') >= 0 or         # crawl
-         other_lc.find('crawl') >= 0 or
-         browser_lc.startswith('java') or         # language lib
-         browser_lc.find('python-urllib') >= 0 or
-         browser_lc.find('libwww-perl') >= 0 or
-         browser_lc.find('yahoo') >= 0 or         # Yahoo
-         browser_lc.find('slurp') >= 0 or         # slurp
-         other_lc.find('slurp') >= 0 or
-         browser_lc.find('curl') >= 0 or          # curl
-         browser_lc.find('python') >= 0 or        # python
-         browser_lc.find('perl') >= 0 or          # perl
-         browser_lc.find('nambu') >= 0 or         # nambu
-         browser_lc.find('docomo') >= 0 or        # DoCoMo
-         browser_lc.find('digext') >= 0 or        # DigExt
-         browser_lc.find('morfeus') >= 0 or       # Morfeus
-         browser_lc.find('twitt') >= 0 or         # twitt
-         browser_lc.find('sphere') >= 0 or        # sphere
-         browser_lc.find('perl') >= 0 or          # perl
-         browser_lc.find('pear') >= 0 or          # PEAR
-         browser_lc.find('wordpress') >= 0 or     # wordpress
-         browser_lc.find('radian') >= 0 or        # radian
-         browser_lc.find('eventbox') >= 0 or      # eventbox
-         browser_lc.find('monitor') >= 0 or       # monitor
-         browser_lc.find('mechanize') >= 0 or     # mechanize
-         browser_lc.find('facebookexternal') >= 0 or # facebookexternal
-         other_lc.find('scoutjet') >= 0 or        # Scoutjet
-         browser_lc.find('yandex') >= 0 or        # Yandex
-         other_lc.find('yandex') >= 0 or
-         browser_lc.find('archiver') >= 0 or      # Archiver
-         browser_lc.find('ia_archiver') >= 0 or   # Alexa
-         other_lc.find('qqdownload') >= 0 or      # QQ
-         other_lc.find('ask jeeves') >= 0 ) )     # Ask Jeeves 
+    log('"{} {}" known bot: {}'.format(browser, other, known_bot))
+    
+    return known_bot
 
 def is_known_harvester(user_agent):
-    ''' Returns True if this access is from a known harvester. '''
+    ''' Returns True if this access is from a known harvester.
     
-    return ( user_agent.startswith('Java/1.4.1_04') or
-             user_agent.startswith('Mozilla/4.0 (compatible ; MSIE 6.0; Windows NT 5.1)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows 98)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT; DigExt; DTS Agent') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)') or
-             user_agent.startswith('Java/1.6.0_04') or
-             user_agent.startswith('Mozilla/4.0(compatible; MSIE 5.0; Windows 98; DigExt)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)') or
-             user_agent.startswith('MJ12bot/v1.0.8 (http://majestic12.co.uk/bot.php?+)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)') or
-             user_agent.startswith('Java/1.6.0_20') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT; DigExt)') or
-             user_agent.startswith('Java/1.6.0_21') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)') or
-             user_agent.startswith('Mozilla/5.0 (compatible; Googlebot/2.1; http://www.google.com/bot.html)') or
-             user_agent.startswith('Java/1.5.0_06') or
-             user_agent.startswith('Java/1.6.0_13') or
-             user_agent.startswith('Java/1.6.0_24') or
-             user_agent.startswith('Java/1.6.0_11') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows 98) XX') or
-             user_agent.startswith('Java/1.6.0_17') or
-             user_agent.startswith('Java/1.6.0_22') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)') or
-             user_agent.startswith('Java/1.6.0_07') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') or
-             user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 6.1; en-us; rv:1.9.2.3) Gecko/20100401 YFF35 Firefox/3.6.3') or
-             user_agent.startswith('Java/1.6.0_23') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; en)') or
-             user_agent.startswith('Java/1.6.0_06') or
-             user_agent.startswith('Java/1.6.0_26') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET') or
-             user_agent.startswith('Java/1.6.0_05') or
-             user_agent.startswith('ISC Systems iRc Search 2.1') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)') or
-             user_agent.startswith('Java/1.6.0_15') or
-             user_agent.startswith('Java/1.6.0_14') or
-             user_agent.startswith('Java/1.6.0_03') or
-             user_agent.startswith('Java/1.6.0_12') or
-             user_agent.startswith('Mozilla/3.0 (compatible)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 2.0.50727)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; InfoPath.1)') or
-             user_agent.startswith('Java/1.6.0_02') or
-             user_agent.startswith('Mozilla/3.0 (compatible; Indy Library)') or
-             user_agent.startswith('Java/1.6.0_18') or
-             user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.0.7) Gecko/20060909 Firefox/1.5.0.7') or
-             user_agent.startswith('Missigua Locator 1.9') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET)') or
-             user_agent.startswith('Java/1.6.0_16') or
-             user_agent.startswith('Java/1.5.0_04') or
-             user_agent.startswith('Java/1.6.0_01') or
-             user_agent.startswith('Wells Search II') or
-             user_agent.startswith('Java/1.6.0') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET CLR 1.0.3705)') or
-             user_agent.startswith('Java/1.6.0_29') or
-             user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.9.2.11) Gecko/20101012 Firefox/3.6.11 GTB7.1 ( .NET CLR 3.5.30729; .NET4.0E)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; MyIE2; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.0.3705;') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Win32)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 2.0.50727)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; InfoPath.1)') or
-             user_agent.startswith('Java/1.5.0_02') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') or
-             user_agent.startswith('Java/1.4.2_03') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; InfoPath.2)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.5; Windows NT 5.0)') or
-             user_agent.startswith('Java/1.6.0_25') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0b; Windows NT 6.0)') or
-             user_agent.startswith('Opera/9.0 (Windows NT 5.1; U; en)') or
-             user_agent.startswith('Java/1.6.0-oem') or
-             user_agent.startswith('Microsoft URL Control - 6.01.9782') or
-             user_agent.startswith('Microsoft URL Control - 6.00.8862') or
-             user_agent.startswith('Java/1.5.0_11') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Win32)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; .NET CLR 3.0.04506)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE8.0; Windows NT 6.0) .NET CLR 2.0.50727)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; FunWebProducts)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.5; Windows NT 4.0)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506; InfoPath.2)') or
-             user_agent.startswith('Java/1.6.0_27') or
-             user_agent.startswith('Java/1.5.0_05') or
-             user_agent.startswith('Mozilla/5.0 (Windows NT 5.1; U; en) Opera 8.01') or
-             user_agent.startswith('Opera/9.00 (Windows NT 5.1; U; en)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; Win64; AMD64)') or
-             user_agent.startswith('Java/1.6.0_10') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET CLR 1.0.3705; .NET CLR 1.1.4322)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; FREE; .NET CLR 1.1.4322)') or
-             user_agent.startswith('8484 Boston Project v 1.0') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; MRA 4.3 (build 01218))') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.0.3705)') or
-             user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') )
+        >>> is_known_harvester('Java/1.4.1_04')
+        True
+        >>> is_known_harvester('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET')
+        True
+        >>> is_known_harvester('')
+        False
+    '''
+    
+    try:
+        known_harvester = ( 
+                 user_agent.startswith('Java/1.4') or
+                 user_agent.startswith('Java/1.5') or
+                 user_agent.startswith('Java/1.6.') or
+                 user_agent.startswith('Java/1.7') or
+                 user_agent.startswith('Java/1.8') or
+                 user_agent.startswith('Mozilla/4.0 (compatible ; MSIE 6.0; Windows NT 5.1)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows 98)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT; DigExt; DTS Agent') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)') or
+                 user_agent.startswith('Mozilla/4.0(compatible; MSIE 5.0; Windows 98; DigExt)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)') or
+                 user_agent.startswith('MJ12bot/v1.0.8 (http://majestic12.co.uk/bot.php?+)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT; DigExt)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)') or
+                 user_agent.startswith('Mozilla/5.0 (compatible; Googlebot/2.1; http://www.google.com/bot.html)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows 98) XX') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') or
+                 user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 6.1; en-us; rv:1.9.2.3) Gecko/20100401 YFF35 Firefox/3.6.3') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; en)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET') or
+                 user_agent.startswith('ISC Systems iRc Search 2.1') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)') or
+                 user_agent.startswith('Mozilla/3.0 (compatible)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 2.0.50727)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; InfoPath.1)') or
+                 user_agent.startswith('Mozilla/3.0 (compatible; Indy Library)') or
+                 user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.0.7) Gecko/20060909 Firefox/1.5.0.7') or
+                 user_agent.startswith('Missigua Locator 1.9') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET)') or
+                 user_agent.startswith('Wells Search II') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET CLR 1.0.3705)') or
+                 user_agent.startswith('Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.9.2.11) Gecko/20101012 Firefox/3.6.11 GTB7.1 ( .NET CLR 3.5.30729; .NET4.0E)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; MyIE2; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.0; Windows NT)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.0.3705;') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Win32)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 2.0.50727)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; InfoPath.1)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; InfoPath.2)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.5; Windows NT 5.0)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0b; Windows NT 6.0)') or
+                 user_agent.startswith('Opera/9.0 (Windows NT 5.1; U; en)') or
+                 user_agent.startswith('Microsoft URL Control - 6.01.9782') or
+                 user_agent.startswith('Microsoft URL Control - 6.00.8862') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Win32)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; .NET CLR 3.0.04506)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE8.0; Windows NT 6.0) .NET CLR 2.0.50727)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; FunWebProducts)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 5.5; Windows NT 4.0)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506; InfoPath.2)') or
+                 user_agent.startswith('Mozilla/5.0 (Windows NT 5.1; U; en) Opera 8.01') or
+                 user_agent.startswith('Opera/9.00 (Windows NT 5.1; U; en)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; Win64; AMD64)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET CLR 1.0.3705; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; FREE; .NET CLR 1.1.4322)') or
+                 user_agent.startswith('8484 Boston Project v 1.0') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; MRA 4.3 (build 01218))') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.0.3705)') or
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') 
+             )
+    except:
+        known_harvester = False
+        log(format_exc())
+        
+    log('{} known harvester: {}'.format(user_agent, known_harvester))
+
+    return known_harvester
     
     
+def is_known_spammer(referer):
+    '''Return True if the referer is a known spammer. '''
+    
+    return (
+        'semalt.com' in referer or 
+        'buttons-for-website.com' in referer or 
+        'makemoneyonline.com' in referer or
+        'domainsigma' in referer
+          )
+
 def get_agent_info(agent):
     '''Get the browser name, version, and other data from the agent.
     

@@ -1,28 +1,20 @@
 '''
     Django assets for reinhardt.
 
-    Copyright 2014 GoodCrypto
-    Last modified: 2014-11-20
+    Copyright 2015 GoodCrypto
+    Last modified: 2015-01-29
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 from django_assets import Bundle, register
 
-bootstrap_js = Bundle('js/jquery.js', 'js/bootstrap.js', 
-                      filters='yui_js', output='js/bootstrap_js.js')
-register('bootstrap_js', bootstrap_js)
 
-admin_js = Bundle('js/jquery.ui.core.js', 'js/jquery.ui.widget.js', 
-                  'js/jquery.ui.mouse.js', 'js/drag.drop.sort.js',
-                  'js/jquery.ui.draggable.js', 'js/jquery.ui.droppable.js', 
-                  'js/jquery.ui.sortable.js',
-                   filters='yui_js', output='js/admin_js.js')
-register('admin_js', admin_js)
+reinhardt_css = Bundle('static/css/bootstrap.min.css', 'static/css/reinhardt.bootstrap.css', 
+                        filters='yui_css', output='static/css/reinhardt.css')
+register('reinhardt_css', reinhardt_css)
 
-
-bootstrap_css = Bundle('css/bootstrap.css', 'css/reinhardt.bootstrap.css', 
-                        filters='yui_css', output='css/bootstrap_css.css')
-register('bootstrap_css', bootstrap_css)
-
+reinhardt_js = Bundle('static/js/bootstrap_js.js', 
+                      filters='yui_js', output='js/reinhardt_js.js')
+register('reinhardt_js', reinhardt_js)
 

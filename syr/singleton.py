@@ -18,7 +18,7 @@
     This module is thread safe.
    
     Copyright 2010-2013 GoodCrypto
-    Last modified: 2014-01-08
+    Last modified: 2015-01-26
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -71,9 +71,11 @@ def singleton(singleton_class, *args, **kwargs):
             instance = _instances[singleton_class]
             
         except:
+            """
             from syr.utils import stacktrace #DEBUG
             log('new singleton instance of %s' % singleton_class) #DEBUG
             log(stacktrace()) #DEBUG
+            """
             instance = singleton_class(*args, **kwargs)
             _instances[singleton_class] = instance
         

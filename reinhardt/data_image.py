@@ -2,7 +2,7 @@
     Convert an image file to a data uri.
 
     Copyright 2012-2014 GoodCrypto           
-    Last modified: 2014-04-25
+    Last modified: 2015-02-07
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -38,6 +38,7 @@ def data_image(filename, browser=None, mime_type=None):
         'ie5' in browser or 
         'ie6' in browser or 
         'ie7' in browser or 
+        # opera only supports images up to 4K so we just ignore them
         'opera' in browser or 
         'java' in browser):
     
@@ -81,31 +82,27 @@ def data_image(filename, browser=None, mime_type=None):
                 But other browsers (e.g. Firefox on linux) can bog down 
                 badly with large data uris. 
             '''
-            always_check_max_size = True
-            log_if_debugging('always_check_max_size = %s' % always_check_max_size)
-            log_if_debugging('browser = %s' % browser)
-            log_if_debugging("'ie8' in browser = %s" % ('ie8' in browser))
-            log_if_debugging("browser and 'ie8' in browser = %s" % (browser and 'ie8' in browser))
-            if always_check_max_size or (browser and ('ie8' in browser)):
+            if browser and ('ie8' in browser):
+                max_size = 32 * 1024
+            else:
+                # the RFC says the max size is 1024, but most browsers
+                #  that support data images support up to 100K
+                max_size = 100 * 1024
     
-                max_size = 32 * 1024      
-                log_if_debugging('os.path.getsize(%s)' % pathname)
-                log_if_debugging('os.path.exists(%s) = %s' % (pathname, os.path.exists(pathname)))
-                assert os.path.exists(pathname), pathname
-                log_if_debugging('os.path.getsize(%s) = %s' % (pathname, os.path.getsize(pathname)))
-                if os.path.getsize(pathname) < max_size:      
-                    log_if_debugging('file_to_data_uri(%s, %s)' % (pathname, mime_type))
-                    result = file_to_data_uri(pathname, mime_type)
-                    log_if_debugging('done file_to_data_uri(%s, %s)' % (pathname, mime_type))
-                        
-                else:
-                    #log_if_debugging('IE8 does not allow data uris larger than 32K: %s' % 
-                    #    pathname)
-                    log_if_debugging('No data uris larger than 32K: %s' % pathname)
-                    
-            else:      
+            log_if_debugging('os.path.getsize(%s)' % pathname)
+            log_if_debugging('os.path.exists(%s) = %s' % (pathname, os.path.exists(pathname)))
+            assert os.path.exists(pathname), pathname
+            log_if_debugging('os.path.getsize(%s) = %s' % (pathname, os.path.getsize(pathname)))
+            if os.path.getsize(pathname) < max_size:      
+                log_if_debugging('file_to_data_uri(%s, %s)' % (pathname, mime_type))
                 result = file_to_data_uri(pathname, mime_type)
-                
+                log_if_debugging('done file_to_data_uri(%s, %s)' % (pathname, mime_type))
+                    
+            else:
+                #log_if_debugging('IE8 does not allow data uris larger than 32K: %s' % 
+                #    pathname)
+                log_if_debugging('No data uris larger than 32K: %s' % pathname)
+                    
         except Exception, e:
             log.error(format_exc())
             # like django template processing, fail quietly
