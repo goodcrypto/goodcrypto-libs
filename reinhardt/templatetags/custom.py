@@ -1,8 +1,8 @@
 '''
     GoodCrypto custom template tags and filters 
    
-    Copyright 2010-2014 GoodCrypto
-    Last modified: 2014-03-03
+    Copyright 2010-2015 GoodCrypto
+    Last modified: 2015-03-25
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''

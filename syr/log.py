@@ -43,8 +43,8 @@ from __future__ import print_function
     Bugs:
         Log.info() can write to more than one log.
 
-    Copyright 2008-2014 GoodCrypto
-    Last modified: 2015-01-02
+    Copyright 2008-2015 GoodCrypto
+    Last modified: 2015-04-12
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -704,7 +704,7 @@ def makedir(dirname, perms=_DEFAULT_LOG_DIR_PERMS):
         try:
             os.makedirs(dirname, perms)
         except:
-            from user import why_file_permission_denied
+            from fs import why_file_permission_denied
             why = why_file_permission_denied(dirname, perms)
             print('syr.log: Could not create log dir: {}'.format(why), file=sys.stderr)
             _debug(why, force=True)

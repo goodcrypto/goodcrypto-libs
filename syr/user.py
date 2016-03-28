@@ -2,13 +2,13 @@
     User utilities.
    
     Copyright 2010 GoodCrypto
-    Last modified: 2015-01-25  
+    Last modified: 2015-04-12  
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 from contextlib import contextmanager
-import fs, grp, os, pwd, sh, sys
+import grp, os, pwd, sh, sys
 from functools import wraps
 try:
     from stat import S_ISDIR
@@ -122,67 +122,6 @@ def users():
     
     return set(syr.cli.run(sh.users).stdout.split())
         
-def why_file_permission_denied(pathname, mode='r'):
-    ''' Return string saying why file access didn't work.
-    
-        If permission is not denied, returns None.
-        
-        If present, the mode parameter is one or more of the characters 
-        'r', 'w', 'x', '+' for 'read', 'write', 'execute', and 'append'.  
-        
-        '+' is treated as 'w'. '''
-    
-    if type(mode) == int:
-        mode = fs.filemode(mode)
-                
-    reason = None
-    permission = False
-    while pathname and reason is None:
-        
-        try:
-            stat_info = os.stat(pathname)
-            
-        except:
-            # if os.stat fails it 's probably because of a dir in the path
-            pass
-            #reason = 'os.stat() failed for {}'.format(pathname)
-            
-        else:
-            
-            #print('{} mode: {}'.format(pathname, fs.filemode(stat_info.st_mode))) #DEBUG
-            
-            for perm in mode:
-                
-                if os.path.isdir(pathname):
-                    try:
-                        # 'x' is search, but is this right for 'r'?
-                        if perm == 'r' or perm == 'x':
-                            os.listdir(pathname)
-                        else:
-                            f = TemporaryFile(dir=pathname)
-                            f.close()
-                        permission = True
-                    except:
-                        reason = 'no "{}" access for {}'.format(perm, pathname)
-                        
-                else:
-                    try:
-                        f = open(pathname, mode)
-                        f.close()
-                        permission = True
-                    except:
-                        reason = 'no "{}" access for {}'.format(perm, pathname)
-                
-        if pathname:
-            # remove last component of pathname
-            parts = pathname.split('/')
-            pathname = '/'.join(parts[:-1])
-        
-    return reason
-    
-def filemode(st_mode):
-    raise Exception('Deprecated. Moved to syr.fs.')
-    
 def getuid(username):
     ''' Return uid for username. '''
     

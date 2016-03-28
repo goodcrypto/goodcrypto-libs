@@ -18,7 +18,7 @@
         http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
 
     Portions Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-01-23
+    Last modified: 2015-04-12
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -228,7 +228,7 @@ class Pump(object):
         except (StopIteration, GeneratorExit):
             # any exception before raise will hide StopIteration
             try:
-                if debug: log(last_exception_only())
+                # if debug: log(last_exception_only())
                 self.after()
             except:
                 log(last_exception())
@@ -466,7 +466,7 @@ class Coroutine(object):
         except (StopIteration, GeneratorExit):
             # any exception before raise will hide StopIteration
             try:
-                if debug: log(last_exception_only())
+                # if debug: log(last_exception_only())
                 self.after()
             except:
                 log(last_exception())

@@ -2,7 +2,7 @@
     Shared django settings for between projects.
 
     Copyright 2009-2014 GoodCrypto
-    Last modified: 2014-03-30
+    Last modified: 2015-04-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -72,20 +72,13 @@ TEMPLATE_CONTEXT_PROCESSORS = (
 )
 
 MIDDLEWARE_CLASSES = (
-    #'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'django.middleware.csrf.CsrfViewMiddleware',
-    #'django.middleware.csrf.CsrfResponseMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    #'django.contrib.sitemaps',
     'django.contrib.messages.middleware.MessageMiddleware',
-    #'debug_toolbar.middleware.DebugToolbarMiddleware',
-    
-    #'reinhardt.middleware.profiler.ProfileMiddleware',
     
     'reinhardt.middleware.template.RequestMiddleware',
     'reinhardt.middleware.template.SettingsMiddleware',

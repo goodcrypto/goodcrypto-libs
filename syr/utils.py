@@ -1029,8 +1029,10 @@ def dynamic_import(name):
 def randint(min=None, max=None):
     ''' Get a random int.
     
-        Only useful when you want the min or max to be the system limit 
-        for an integer. Otherwise use random.randint(). 
+        random.randint() requires that you specify the min and max of 
+        the integer range for a random int. But you almost always want 
+        the min and max to be the system limits for an integer. 
+        If not use random.randint(). 
     
         'min' defaults to system minimum integer.
         'max' defaults to system maximum integer.

@@ -3,7 +3,7 @@
     Browser utilities.
     
     Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-02-13
+    Last modified: 2015-04-14
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -133,7 +133,7 @@ def browser_types(request):
     return user_agent_tags(ua)    
     
 def is_primitive_browser(request):
-    ''' Returns whether browser is dumb based on Django request. 
+    ''' Returns whether browser is probably primitive. 
         A browser is primitive if it can not properly display javascript or css. '''
     
     b = browser_types(request)    
@@ -293,6 +293,7 @@ def is_known_harvester(user_agent):
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET CLR 1.0.3705; .NET CLR 1.1.4322)') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; FREE; .NET CLR 1.1.4322)') or
                  user_agent.startswith('8484 Boston Project v 1.0') or
+                 user_agent.startswith('Mozilla/5.0 (compatible; MegaIndex.ru/2.0; +https://www.megaindex.ru/?tab=linkAnalyze)') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30)') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; MRA 4.3 (build 01218))') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.0.3705)') or

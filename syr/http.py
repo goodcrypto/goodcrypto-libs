@@ -2,7 +2,7 @@
     HTTP utilities
     
     Copyright 2013 GoodCrypto
-    Last modified: 2014-03-14
+    Last modified: 2015-03-11
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -11,7 +11,10 @@ import httplib
 import urlparse
 
 from syr.dict import CaseInsensitiveDict
+from syr.log import get_log
 from syr.utils import gunzip
+
+log = get_log()
 
 http_eol = '\r\n'
 http_separator = http_eol + http_eol
@@ -20,22 +23,34 @@ ports = dict(
     http = 80, 
     https = 443)
 
-def get_response(url, proxy=None):
+def get_response(url, proxy=None, cert_file=None):
     ''' Get an httplib.HttpResponse for the url '''
     
     url_parts = urlparse.urlsplit(url)
     
+    if url_parts.scheme == 'https':
+        constructor = httplib.HTTPSConnection
+        kwargs = dict(cert_file=cert_file)
+    elif url_parts.scheme == 'http':
+        constructor = httplib.HTTPConnection
+        kwargs = {}
+    else:
+        raise ValueError('{} not supported'.format(url_parts.scheme))
+    
     if proxy is None:
-        conn = httplib.HTTPConnection(
-            url_parts.hostname, 
-            url_parts.port or ports[url_parts.scheme])
+        log.debug('get response from {}'.format(url))
+        conn = constructor(url_parts.hostname, 
+            url_parts.port or ports[url_parts.scheme],
+            **kwargs)
     
     else:
-        # weirdly, HTTPConnection() gets the proxy and set_tunnel() gets the destination domain
+        log.debug('get response from "{}" using proxy "{}"'.format(url, proxy))
+        # weirdly, HTTPConnection() gets the proxy, and set_tunnel() gets the destination domain
         proxy_parts = urlparse.urlsplit(proxy)
-        conn = httplib.HTTPConnection(
+        conn = constructor(
             proxy_parts.hostname, 
-            proxy_parts.port)
+            proxy_parts.port,
+            **kwargs)
         
         conn.set_tunnel(
             url_parts.hostname, 
@@ -211,3 +226,7 @@ def content_encoding_charset(params):
                     
     return charset
     
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+

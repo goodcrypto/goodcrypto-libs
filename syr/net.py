@@ -28,37 +28,42 @@ def hostname():
     return socket.gethostname()
     
 def hostaddress():
-    ''' Convenience method to get the host ip address. 
-    
-        If the primary network interface isn't eth0 or wan0, use
-        syr.net.device_address().
+    ''' Get the host ip address. 
     '''
     
+    ip = None
     try:
         ip_by_name = socket.gethostbyname(hostname())
-    
-        # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
-        if not interface_from_ip(ip_by_name):
-            raise Exception(
-                'socket.gethostbyname(hostname()) returned {}, but no interface has that address. Is /etc/hosts wrong?'
-                .format(ip_by_name))
-            
-        result = ip_by_name
                 
     except socket.gaierror:       
         log.debug('no address for hostname: {}'.format(hostname()))
         
-        ip = None
+    else:            
+        if ip_by_name == '127.0.0.1':   
+            log.debug('hostname has address of 127.0.0.1: {}'.format(hostname()))
+
+        else:
+            # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
+            interface = interface_from_ip(ip_by_name)
+            
+            if interface:
+                ip = ip_by_name
+            else:
+                raise Exception(
+                    'socket.gethostbyname(hostname()) returned {}, but no interface has that address. Is /etc/hosts wrong?'
+                    .format(ip_by_name))
+        
+    if not ip:
+        # find first net device with an ip address, excluding 'lo'
         for interface in interfaces():
             if not ip:
                 if interface != 'lo':
                     ip = device_address(interface)
-        if not ip:
-            raise Exception('no ip address')
+                    
+    if not ip:
+        raise Exception('no ip address')
             
-        result = ip
-    
-    return result
+    return ip
     
 def interfaces():
     ''' Get net interfaces. '''
@@ -75,8 +80,9 @@ def device_address(device):
         m = re.match(r'.*inet addr:(\d+\.\d+\.\d+\.\d+)', line)
         if m:
             ip = m.group(1)
-            log.debug('ip: {}'.format(ip))
             
+    log.debug('{} ip: {}'.format(device, ip))
+    
     return ip
     
 def mac_address(device):
@@ -152,7 +158,7 @@ def set_etc_hosts_address(hostname, ip):
     assert newtext
     write_etc_hosts(newtext)
         
-    # check # /etc/hosts
+    # check /etc/hosts
     assert read_file('/etc/hosts') == newtext
 
 

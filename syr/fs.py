@@ -2,7 +2,7 @@
     File system.
 
     Copyright 2008-2014 GoodCrypto
-    Last modified: 2015-01-01
+    Last modified: 2015-04-12
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -176,7 +176,6 @@ def makedir(dirname, owner=None, group=None, perms=None):
                 os.makedirs(dirname)
                 chmod(perms, dirname, recursive=True)
             except OSError:
-                from syr.user import why_file_permission_denied
                 log.error(why_file_permission_denied(dirname, perms))
                 raise
 
@@ -855,6 +854,64 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
     os.chmod(filename, mode)
     assert mode == os.stat(filename).st_mode
 
+def why_file_permission_denied(pathname, mode='r'):
+    ''' Return string saying why file access didn't work.
+    
+        If permission is not denied, returns None.
+        
+        If present, the mode parameter is one or more of the characters 
+        'r', 'w', 'x', '+' for 'read', 'write', 'execute', and 'append'.  
+        
+        '+' is treated as 'w'. '''
+    
+    if type(mode) == int:
+        mode = filemode(mode)
+                
+    reason = None
+    permission = False
+    while pathname and reason is None:
+        
+        try:
+            stat_info = os.stat(pathname)
+            
+        except:
+            # if os.stat fails it 's probably because of a dir in the path
+            pass
+            #reason = 'os.stat() failed for {}'.format(pathname)
+            
+        else:
+            
+            #print('{} mode: {}'.format(pathname, filemode(stat_info.st_mode))) #DEBUG
+            
+            for perm in mode:
+                
+                if os.path.isdir(pathname):
+                    try:
+                        # 'x' is search, but is this right for 'r'?
+                        if perm == 'r' or perm == 'x':
+                            os.listdir(pathname)
+                        else:
+                            f = TemporaryFile(dir=pathname)
+                            f.close()
+                        permission = True
+                    except:
+                        reason = 'no "{}" access for {}'.format(perm, pathname)
+                        
+                else:
+                    try:
+                        f = open(pathname, mode)
+                        f.close()
+                        permission = True
+                    except:
+                        reason = 'no "{}" access for {}'.format(perm, pathname)
+                
+        if pathname:
+            # remove last component of pathname
+            parts = pathname.split('/')
+            pathname = '/'.join(parts[:-1])
+        
+    return reason
+    
 def replace_file(filename, content):
     """ Replace file content.
     

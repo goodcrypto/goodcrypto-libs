@@ -1,8 +1,8 @@
 '''
     Utility classes and functions.
 
-    Copyright 2009-2014 GoodCrypto
-    Last modified: 2014-03-03
+    Copyright 2009-2015 GoodCrypto
+    Last modified: 2015-04-15
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -10,6 +10,7 @@
 
 import os, urllib
 from datetime import datetime
+from traceback import format_exc
 
 from django.conf import settings
 #from django.http import HttpResponse
@@ -51,7 +52,22 @@ def to_unicode(s):
                 unicode_s = u''
 
     return unicode_s
+
+def is_secure_connection(request):
+    ''' Check if connection is secure. '''
     
+    secure = False
+    try:
+        if 'HTTP_X_SCHEME' in request.META:
+            secure = 'https' == request.META['HTTP_X_SCHEME']
+        elif 'wsgi.url_scheme' in request.META:
+            secure = 'https' == request.META['wsgi.url_scheme']
+    except:
+        log(format_exc())
+
+    log('connection secure from request: {}'.format(secure))
+
+    return secure
 
 def django_error_page_response(request, error=None):
     ''' Return a response with Django's error page.
