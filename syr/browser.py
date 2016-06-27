@@ -315,7 +315,9 @@ def is_known_spammer(referer):
         'semalt.com' in referer or 
         'buttons-for-website.com' in referer or 
         'makemoneyonline.com' in referer or
-        'domainsigma' in referer
+        'domainsigma' in referer or
+        'best-seo-offer.com' in referer or
+        'domini.cat' in referer
           )
 
 def get_agent_info(agent):
