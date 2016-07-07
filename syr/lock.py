@@ -2,17 +2,27 @@
     Locked threading.Lock context.
 
     Copyright 2011-2012 GoodCrypto
-    Last modified: 2014-11-13
+    Last modified: 2015-06-14
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
-import atexit, os, threading
+import atexit, os, threading, traceback
 from contextlib import contextmanager
 from os import O_CREAT, O_EXCL, O_RDWR
 
+DEBUGGING = False
+def _debug(msg):
+    ''' Output debug message. 
+    
+        We don't use syr.log because that module uses this one
+    '''
+    
+    if DEBUGGING:
+        print(msg)
+
 @contextmanager
-def locked(lock=None, blocking=1):
+def locked(lock=None, blocking=True):
     ''' Context manager to acquire a lock.
 
         This is a lock within a process. See system_locked() for a system wide lock.
@@ -28,13 +38,19 @@ def locked(lock=None, blocking=1):
     if not lock:
         lock = threading.Lock()
 
+    _debug('acquiring lock')
+    if DEBUGGING:
+        traceback.print_stack()
     lock.acquire(blocking)
+    _debug('lock acquired')
 
     try:
         yield
 
     finally:
+        _debug('releasing lock')
         lock.release()
+        _debug('lock released')
 
 @contextmanager
 def system_locked(name):

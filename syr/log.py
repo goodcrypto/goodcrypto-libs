@@ -4,25 +4,27 @@ from __future__ import print_function
     Logging.
 
     Much simpler and more powerful python logging.
-    
+
       * Instant logs. No complex setup.
       * Logs have useful default names.
-        * Easy to find in a single directory tree. 
-        * You always know which log goes with a module. 
+        * Easy to find in a single directory tree.
+        * You always know which log goes with a module.
       * There's no conflict between users.
-      * A master log shows you all log entries in order.
+      * A master log for each user shows you all log entries in order.
 
     >>> import syr.log
     >>> log = syr.log.get_log()
     >>> log('message')
-    
+
     The default log file is "/var/local/log/USER/MODULE.log".
-    
+    USER is the current user. MODULE is the module calling this one.
+
     Logging levels work as usual. The default logging level is DEBUG.
     >>> log.debug('debugging message')
     >>> log.info('informational message')
+    >>> log('debugging message')
 
-    You can specify a log filename, which appears in the 
+    You can specify a log filename, which appears in the
     /var/local/log/USER directory.
     >>> log = get_log('special.log')
     >>> log('log message to specified file')
@@ -31,27 +33,27 @@ from __future__ import print_function
     >>> log = get_log('/tmp/special.log')
     >>> log('log message to specified path')
 
-    The default automatic managed logging works especially well in complex 
-    systems when apps run as separate users, but the apps share modules that 
-    generate their own logs. There's no conflict over which user owns a 
+    The default automatic managed logging works especially well in complex
+    systems when apps run as separate users, but the apps share modules that
+    generate their own logs. There's no conflict over which user owns a
     module's log.
 
     If a program that doesn't use syr.log needs to access a log directory
     in /var/local/log, you may need to create /var/local/log/USER in advance.
     Make sure USER owns it.
-    
+
     Bugs:
         Log.info() can write to more than one log.
 
     Copyright 2008-2015 GoodCrypto
-    Last modified: 2015-04-12
+    Last modified: 2015-08-03
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 """
     Developer notes.
-    
+
     Based on python standard logging.
 
     Python gets confused about circular imports.
@@ -67,9 +69,9 @@ from __future__ import print_function
                 from syr.log import get_log
                 _log = get_log()
             _log(message)
-            
+
     Some modules can't import this one, e.g. django's settings.py. An alternative
-    is to use python's built-in logger directly.
+    is to use syr.log._debug(..., force=True), or python's built-in logger directly.
     Example:
 
         import logging
@@ -82,6 +84,10 @@ from __future__ import print_function
         except:
             pass
         log = logging.debug
+
+        ...
+
+        log(...)
 """
 # delete in python 3
 import sys
@@ -90,7 +96,7 @@ sys.setdefaultencoding('utf-8')
 
 import atexit, logging, os, os.path, sh, shutil, smtplib, stat, sys, tempfile, threading, time
 from threading import Thread
-from traceback import format_exc
+from traceback import format_exc, format_stack
 from glob import glob
 
 # analogous to /var/log
@@ -100,7 +106,7 @@ BASE_LOG_DIR = '/var/local/log'
 # perms for the base log dir, then create the BASE_LOG_DIR in advance with
 # the perms you want. Also, create a subdirectory for each user that will run apps
 # which write using syr.log. For example, create the following subdirectories:
-# goodcrypto, www-data, and one for each local user. Each subdirectory should be 
+# goodcrypto, www-data, and one for each local user. Each subdirectory should be
 # owned by its user. If a program that doesn't use syr.log needs a directory,
 # you may need to create it in advance.
 BASE_LOG_DIR_PERMS = 0777
@@ -113,10 +119,10 @@ _raise_logging_errors = False
 # the log module cannot easily use logs itself
 # so _DEBUGGING turns alternate logging on and off
 # use _debug(msg) to log debugging messages
-# WARNING: Setting _DEBUGGING to True will destroy isolation of logs for 
-#          different users. This will cause strange seemingly unrelated 
+# WARNING: Setting _DEBUGGING to True will destroy isolation of logs for
+#          different users. This will cause strange seemingly unrelated
 #          errors and cost you days of debugging. Leave _DEBUGGING set to
-#          False except when you're explicitly debugging this module. 
+#          False except when you're explicitly debugging this module.
 _DEBUGGING = False
 _DEBUGGING_LOG_REMOVE_DISABLE = True
 
@@ -139,24 +145,26 @@ class NullHandler(logging.Handler):
 null_handler = NullHandler()
 logging.getLogger('').addHandler(null_handler)
 '''
-default_logfile = tempfile.NamedTemporaryFile(
+basic_logging_file = tempfile.NamedTemporaryFile(
     mode='a',
     prefix='python.default.', suffix='.log',
     delete=True)
-os.chmod(default_logfile.name, 0666)
+os.chmod(basic_logging_file.name, 0666)
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
                     # using os.devnull results in "Bad file descriptor" when
                     # python logging closes the stream
                     # stream=open(os.devnull, 'a'))
-                    stream=default_logfile)
+                    stream=basic_logging_file)
 
 def _debug(message, force=False, filename=None, mode=None):
     if force or _DEBUGGING:
+
         if filename is None:
-            filename = '/tmp/syr.log.debug.log'
+            filename = '/tmp/syr.log.debug.{}.log'.format(whoami())
         if mode is None:
             mode = '0666'
+
         # print(message)
         sh.touch(filename)
         try:
@@ -165,17 +173,20 @@ def _debug(message, force=False, filename=None, mode=None):
             # hopefully the perms are already ok
             pass
         with open(filename, 'a') as log:
+            ct = time.time()
+            milliseconds = int((ct - long(ct)) * 1000)
             t = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-            log.write('{} {}\n'.format(t, message))
-        
+            log.write('{},{:03} {}\n'.format(t, milliseconds, message))
+
 '''
     For speed, tested log messages queued and written to
     the log file in a separate thread. This avoids the main thread
     waiting on every write.
 
-    Queuing log writes is actually slower, eats too much memory, and gets strange errors.
-    Probably the overhead of queueing is higher than the overhead of writing a log message to disk.
-    Because we do not limit the size of the log queue, it will grow to the size of
+    Queuing log writes is actually slower, eats too much memory, and
+    gets strange errors. Probably the overhead of queueing is higher
+    than the overhead of writing a log message to disk. Because we do
+    not limit the size of the log queue, it will grow to the size of
     unwritten logs.
 
     Example error:
@@ -201,45 +212,42 @@ def _debug(message, force=False, filename=None, mode=None):
     '''
 class CustomFileHandler(logging.FileHandler):
     ''' Our FileHandler. '''
-    
+
     def flush(self):
         ''' Flush the handler. '''
 
         # don't recurse
         if not getattr(self, '_flushing', False):
-            
+
             self._flushing = True
-            
+
             # requires magic knowledge of logging.FileHandler internals
-            # _debug('CustomFileHandler.flush() start', force=True) #DEBUG
             self.close()
-            # _debug('CustomFileHandler.flush() closed', force=True) #DEBUG
             self._open()
-            # _debug('CustomFileHandler.flush() end', force=True) #DEBUG
-            
+
             self._flushing = False
-            
+
     def handleError(self, record):
         ''' Fix for useless logging during some errors:
-        
+
                 Traceback (most recent call last):
                   File "/usr/lib/python2.7/logging/__init__.py", line 850, in emit
-        
+
             see Getting a more useful 'logging' module error output in python
-                http://stackoverflow.com/questions/6898674/getting-a-more-useful-logging-module-error-output-in-python        
+                http://stackoverflow.com/questions/6898674/getting-a-more-useful-logging-module-error-output-in-python
         '''
         raise
 
 class StreamHandlerFixed(logging.StreamHandler):
     ''' Fix for useless logging during some errors:
-    
+
             Traceback (most recent call last):
               File "/usr/lib/python2.7/logging/__init__.py", line 850, in emit
-    
+
         see Getting a more useful 'logging' module error output in python
-            http://stackoverflow.com/questions/6898674/getting-a-more-useful-logging-module-error-output-in-python        
+            http://stackoverflow.com/questions/6898674/getting-a-more-useful-logging-module-error-output-in-python
     '''
-    
+
     def handleError(self, record):
         raise
 
@@ -267,25 +275,17 @@ class _Log(object):
 
     def __init__(self, filename=None, dirname=None, group=None, recreate=False, noisy=False):
 
-        self.pathname = get_log_path(filename=filename, dirname=dirname)
-        self.filename = os.path.basename(self.pathname)
-        self.dirname = os.path.dirname(self.pathname)
-
+        self.filename = filename
+        self.dirname = dirname
         self.group = group
-        self.user = whoami()
-
+        self.user = None
         self.recreate = recreate
-        if recreate and os.path.exists(self.pathname):
-            if _DEBUGGING_LOG_REMOVE_DISABLE:
-                _debug('_DEBUGGING_LOG_REMOVE_DISABLE disabled: __init__() removing {}'.format(self.pathname)) #DEBUG
-            else:
-                os.remove(self.pathname)
+        self.noisy = noisy
 
         self.handler = None
         self.opened = False
         self.debugging = False
         self.stdout_stack = []
-        self.noisy = noisy
 
     def __call__(self, message, verbose=False, say_message=False, exception=False):
         ''' Output log message, optionally also to stdout and audibly.
@@ -301,16 +301,20 @@ class _Log(object):
         '''
 
         self.write(message)
+
         if not self.is_master():
 
             if verbose:
                 print(message)
+
             if say_message:
                 try:
                     from syr.utils import say
                     say(message)
                 except:
                     pass
+
+            # this is 'exception' passed to __call__()
             if exception:
                 self.last_exception()
 
@@ -366,15 +370,17 @@ class _Log(object):
         ''' Write directly to python logger. '''
 
         from syr.lock import locked
-        
+
         with locked(_Log.lock):
+
+            self.check_user()
 
             if not self.opened:
                 try:
-                    self.open(self.pathname)
+                    self.open()
                 except:
                     self.last_exception()
-                
+
             try:
                 self.logger_debug(message)
             except:
@@ -401,8 +407,8 @@ class _Log(object):
         self.log('ERROR', msg, *args, **kwargs)
 
     def log(self, level, msg, *args, **kwargs):
-        ''' Compatibility with standard python logging. 
-        
+        ''' Compatibility with standard python logging.
+
             Utility function to support log.debug(), etc.
             Called as self.log('DEBUG', ...), self.log('INFO', ...), etc.
         '''
@@ -413,13 +419,13 @@ class _Log(object):
             message = msg.format(*args)
         else:
             message = msg
-            
+
         try:
             try:
                 level.encode('utf-8')
             except UnicodeDecodeError:
                 level = ''
-                
+
             try:
                 message = unicode(message, encoding='utf-8', errors='replace')
             except TypeError:
@@ -427,59 +433,71 @@ class _Log(object):
                 pass
             except UnicodeDecodeError:
                 message = '-- message contains unprintable characters --'
-                
+
             self.write('{} {}'.format(level, message))
-            
+
         except Exception:
             self.last_exception()
-    
+
     def logger_debug(self, message):
         try:
             try:
                 message.encode('utf-8', errors='replace')
             except UnicodeDecodeError:
                 message = '-- message contains unprintable characters --'
+
             self.logger.debug(message)
+
         except:
+            _debug(message, force=True)
             self.last_exception()
 
-    def stream(self):
-        ''' Return open log file.
-
-            Used for writing to a log file without adding a timestamp for each line. '''
-
-        assert False, 'Deprecated'
-
-    def open(self, pathname):
+    def open(self):
         '''Open the file for appending.
            Set the permissions.'''
 
         if not self.opened:
 
-            #assert 'threading' not in pathname, pathname #DEBUG
-            _debug('self.open({})'.format(pathname)) #DEBUG
+            self.pathname = get_log_path(filename=self.filename, dirname=self.dirname)
+            # filename and dirname have likely changed
+            self.filename = os.path.basename(self.pathname)
+            self.dirname = os.path.dirname(self.pathname)
+            if self.recreate and os.path.exists(self.pathname):
+                if _DEBUGGING_LOG_REMOVE_DISABLE:
+                    _debug('_DEBUGGING_LOG_REMOVE_DISABLE disabled: __init__() removing {}'.format(self.pathname)) #DEBUG
+                else:
+                    os.remove(self.pathname)
 
-            parent_dir = os.path.dirname(pathname)
-            makedir(parent_dir)
+            makedir(self.dirname)
 
-            exists = os.path.exists(pathname)
+            if self.user not in _master_logs:
+                _master_logs[self.user] = get_log('master.log', dirname=self.dirname)
 
-            self.handler = CustomFileHandler(pathname, encoding = 'UTF-8')
-            formatter = logging.Formatter("%(asctime)s %(message)s")
-            self.handler.setFormatter(formatter)
-            self.handler.setLevel(logging.DEBUG)
+            try:
+                self.handler = CustomFileHandler(self.pathname, encoding = 'UTF-8')
+            except IOError:
+                import syr.fs
+                why = syr.fs.why_file_permission_denied(self.pathname, mode='w')
+                _debug(
+                    'Could not log to {}. {}. Check if get_log() was called as a different user.'.
+                    format(self.pathname, why), force=True)
+                raise
+            else:
+                formatter = logging.Formatter("%(asctime)s %(message)s")
+                self.handler.setFormatter(formatter)
+                self.handler.setLevel(logging.DEBUG)
 
-            name = os.path.basename(pathname)
+            name = self.filename
             if name.endswith('.log'):
                 name = name[:-4]
             self.logger = logging.getLogger(name)
             self.logger.addHandler(self.handler)
 
             try:
-                os.chmod(pathname, _DEFAULT_PERMS)
+                os.chmod(self.pathname, _DEFAULT_PERMS)
             except:
                 self.last_exception()
-                
+
             # try to match the file group to the owner
             """
             try:
@@ -497,39 +515,58 @@ class _Log(object):
         if self.opened and self.handler is not None:
             self.handler.flush()
 
-    def is_master(self):
+    def close(self):
+        ''' Close the log. '''
 
-        if self.user not in _master_logs:
-            _master_logs[self.user] = get_log('master.log', dirname=self.dirname)
+        if self.opened and self.handler is not None:
+            self.handler.close()
+            self.opened = False
+
+    def is_master(self):
+        ''' Return whether this log is a master log. '''
 
         return self == _master_logs[self.user]
 
     def last_exception(self, message=None):
-        ''' Try to notify of last exception. '''
-        
-        from syr.utils import last_exception
-        
+        ''' Try to notify of last exception.
+
+            We don't want to stop a program because of a log error
+        '''
+
+        import syr.utils
+
         try:
-            _debug(last_exception(), force=True)
+            _debug(syr.utils.last_exception(), force=True)
         except:
             pass
-        
+
         try:
             if message:
                 self.write(message)
         except:
             pass
-            
-        try:
-            self.write(last_exception())
-        except:
-            pass
-        
-    def no_control_chars(self, text):
-        ''' Replace control characters other than '\t', '\n' and '\r' 
-            with '?'. 
+
+    def check_user(self):
+        ''' Detect user changed.
+
+            Each user has its own separate set of logs.
         '''
-        
+
+        current_user = whoami()
+        if self.user is None:
+            self.user = current_user
+        elif self.user != current_user:
+            msg = 'Log user changed from {} to {}.'.format(self.user, current_user)
+            _debug(msg, force=True)
+            self.user = current_user
+            # the next write() should open the log as the right user
+            self.close()
+
+    def no_control_chars(self, text):
+        ''' Replace control characters other than '\t', '\n' and '\r'
+            with '?'.
+        '''
+
         newtext = ''
         for ch in str(text):
             if ch < ' ' and ch != '\t' and ch != '\n' and ch != '\r':
@@ -608,27 +645,22 @@ def get_log_path(filename=None, dirname=None):
         >>> assert os.path.dirname(path) == os.path.join(BASE_LOG_DIR, whoami())
     '''
 
-    _debug('get_log(filename={}, dirname={})'.format(filename, dirname)) #DEBUG
-
     if filename is None:
         from syr.python import caller_module_name
         filename = caller_module_name(ignore=[__file__])
-        _debug('filename defaulted: {}'.format(filename)) #DEBUG
 
     # sometimes we pass the filename of the caller so strip the end
     if filename.endswith('.py') or filename.endswith('.pyc'):
         filename, _, _ = filename.rpartition('.')
-        
+
     filename = default_log_filename(filename)
     if dirname is None:
         dirname = default_log_dir()
-        _debug('get_log() dirname={}'.format(dirname)) #DEBUG
     else:
         # no relative dir names
         assert dirname.startswith('/')
 
     logpath = os.path.join(dirname, filename)
-    _debug('get_log() logpath={}'.format(logpath)) #DEBUG
 
     return logpath
 
@@ -641,7 +673,6 @@ def default_log_dir():
 
     create_base_log_dir()
     user = whoami()
-    _debug('user: {}'.format(user)) #DEBUG
     dirname = os.path.join(BASE_LOG_DIR, user)
     makedir(dirname)
     return dirname
@@ -651,13 +682,11 @@ def delete_all_logs(dirname=None):
 
     if not dirname:
         dirname = default_log_dir()
-                
+
     if _DEBUGGING_LOG_REMOVE_DISABLE:
         _debug('_DEBUGGING_LOG_REMOVE_DISABLE disabled: delete_all_logs() removing {}'.format(dirname)) #DEBUG
 
     else:
-        _debug('delete_all_logs() removing {}'.format(dirname)) #DEBUG
-
         # don't delete dirname itself
         entries = glob(os.path.join(dirname, '*'))
         # make sure this dir has at least one log, i.e. is possibly a logs dir
@@ -690,17 +719,17 @@ def create_base_log_dir():
 
         # BASE_LOG_DIR must be created by root
         if whoami() != 'root':
-            sys.exit('As root, run "mkdir --parents --mode={} {}"'.
-                format(oct(BASE_LOG_DIR_PERMS), BASE_LOG_DIR))
+            sys.exit('As root, run "mkdir --parents --mode={} {}", then chmod {} {}'.
+                format(
+                    oct(BASE_LOG_DIR_PERMS), BASE_LOG_DIR),
+                oct(BASE_LOG_DIR_PERMS), BASE_LOG_DIR)
 
-        _debug('os.makedirs(dirname={}, perms={})'.format(BASE_LOG_DIR, oct(BASE_LOG_DIR_PERMS))) #DEBUG
         os.makedirs(BASE_LOG_DIR, BASE_LOG_DIR_PERMS)
         # redo perms using chmod to avoid umask
         os.chmod(BASE_LOG_DIR, BASE_LOG_DIR_PERMS)
 
 def makedir(dirname, perms=_DEFAULT_LOG_DIR_PERMS):
     if not os.path.exists(dirname):
-        _debug('os.makedirs(dirname={}, perms={})'.format(dirname, oct(perms))) #DEBUG
         try:
             os.makedirs(dirname, perms)
         except:
@@ -710,13 +739,13 @@ def makedir(dirname, perms=_DEFAULT_LOG_DIR_PERMS):
             _debug(why, force=True)
             raise
     assert os.path.isdir(dirname)
-    
+
 def whoami():
     ''' Get user '''
-    
+
     # syr.user.whoami() not used to avoid recursive imports
     return sh.whoami().stdout.strip()
-    
+
 if __name__ == "__main__":
 
     import doctest

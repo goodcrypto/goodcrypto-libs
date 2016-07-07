@@ -2,8 +2,8 @@
 '''
     MIME constants.
 
-    Copyright 2014 GoodCrypto
-    Last modified: 2014-12-24
+    Copyright 2014-2015 GoodCrypto
+    Last modified: 2015-07-11
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -14,6 +14,7 @@ CONTENT_DISPOSITION_KEYWORD = "Content-Disposition"
 
 RETURN_PATH_KEYWORD = 'Return-Path'
 DELIVERED_TO_KEYWORD = 'Delivered-To'
+X_ORIGINAL_TO_KEYWORD = 'X-Original-To'
 FROM_KEYWORD = 'From'
 TO_KEYWORD = 'To'
 CC_KEYWORD = 'Cc'
@@ -42,6 +43,7 @@ MULTIPART_ALT_TYPE = '{}{}{}'.format(MULTIPART_PRIMARY_TYPE, PRIMARY_TYPE_DELIMI
 MULTIPART_MIXED_TYPE = '{}{}{}'.format(MULTIPART_PRIMARY_TYPE, PRIMARY_TYPE_DELIMITER, MIXED_SUB_TYPE)
 MULTIPART_SIGNED_TYPE = '{}{}{}'.format(MULTIPART_PRIMARY_TYPE, PRIMARY_TYPE_DELIMITER, SIGNED_SUB_TYPE)
 APPLICATION_TYPE = "application"
+APPLICATION_ALT_TYPE = '{}{}{}'.format(APPLICATION_TYPE, PRIMARY_TYPE_DELIMITER, ALTERNATIVE_SUB_TYPE)
 PGP_SUB_TYPE = "pgp-encrypted"
 PGP_TYPE = '{}{}{}'.format(APPLICATION_TYPE, PRIMARY_TYPE_DELIMITER, PGP_SUB_TYPE)
 PGP_SIG_SUB_TYPE = "pgp-signature"

@@ -1,8 +1,8 @@
 '''
     Shared django settings for between projects.
 
-    Copyright 2009-2014 GoodCrypto
-    Last modified: 2015-04-02
+    Copyright 2009-2015 GoodCrypto
+    Last modified: 2015-05-07
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -15,7 +15,6 @@ REINHARDT_PROJECT_PATH = os.path.dirname(__file__).replace('\\','/')
 # probably want to include this directory in the TEMPLATES_DIR so the shared admin templates are used
 REINHARDT_TEMPLATE_DIR = os.path.join(REINHARDT_PROJECT_PATH, 'templates', 'reinhardt')
 
-SEND_BROKEN_LINK_EMAILS = True
 APPEND_SLASH = True
 
 # Local time zone for this installation. Choices can be found here:
@@ -32,6 +31,9 @@ USE_TZ = True
 # Language code for this installation. All choices can be found here:
 # http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = 'en-CA'
+LANGUAGES = [
+    ('en', 'English'),
+]
 
 # If you set this to False, Django will make some optimizations so as not
 # to load the internationalization machinery.
@@ -72,6 +74,7 @@ TEMPLATE_CONTEXT_PROCESSORS = (
 )
 
 MIDDLEWARE_CLASSES = (
+    'django.middleware.common.BrokenLinkEmailsMiddleware',
     'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

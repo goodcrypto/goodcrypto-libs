@@ -4,7 +4,7 @@
     This does not work with all forms of output, such as the archaic "print >>".
    
     Copyright 2011 GoodCrypto
-    Last modified: 2014-04-30
+    Last modified: 2015-06-08
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -19,6 +19,25 @@ from log import get_log
 
 log = get_log()
     
+@contextmanager
+def redir_stdin(stream):
+    ''' Context manager for print that redirects sys.stdin, and hence 
+        standard raw_input(), to another file-like stream. 
+    
+        >>> import cStringIO
+        >>> input = cStringIO.StringIO('test stdin data')
+        >>> with redir_stdin(input):
+        ...     print(raw_input())
+        test stdin data
+    '''
+
+    saved_stdin = sys.stdin
+    sys.stdin = stream
+    try:
+        yield
+    finally:
+        sys.stdin = saved_stdin
+        
 @contextmanager
 def redir_stdout(stream):
     ''' Context manager for print that redirects sys.stdout, and hence 
@@ -70,7 +89,27 @@ def redir_stdout_and_stderr(stream):
     finally:
         sys.stdout = saved_stdout
         sys.stderr = saved_stderr
-   
+
+"""
+@contextmanager
+def redir_raw_input(stream):
+    ''' Context manager for print that redirects raw_input to another file-like stream. 
+    
+        >>> import cStringIO
+        >>> input = cStringIO.StringIO('test raw data')
+        >>> with redir_raw_input(input):
+        ...     print(raw_input())
+        test raw data
+    '''
+
+    saved_raw_input = __builtins__.raw_input
+    __builtins__.raw_input = stream
+    try:
+        yield
+    finally:
+        __builtins__.raw_input = saved_raw_input
+"""
+
 class stdout_str_value(object):
     ''' Context manager to redirect stdout as a value for str(). 
 

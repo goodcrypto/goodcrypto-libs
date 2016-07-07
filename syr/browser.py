@@ -3,7 +3,7 @@
     Browser utilities.
     
     Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-04-14
+    Last modified: 2015-05-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -156,6 +156,8 @@ def is_known_bot(browser, other):
         True
         >>> is_known_bot('Mozilla', '(compatible; Googlebot/2.1; +http://www.google.com/bot.html) agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html')
         True
+        >>> is_known_bot('ltx71', '(http://ltx71.com/)')
+        True
         >>> is_known_bot('', '')
         False
     '''
@@ -204,7 +206,8 @@ def is_known_bot(browser, other):
             'archiver' in browser_lc or      # Archiver
             'ia_archiver' in browser_lc or   # Alexa
             'qqdownload' in other_lc or      # QQ
-            'ask jeeves' in other_lc         # Ask Jeeves 
+            'ask jeeves' in other_lc or      # Ask Jeeves 
+            'ltx71' in browser_lc            # Scan internet for security research purposes
             )
     except:
         known_bot = False
@@ -314,6 +317,7 @@ def is_known_spammer(referer):
     return (
         'semalt.com' in referer or 
         'buttons-for-website.com' in referer or 
+        'buttons-for-your-website.com' in referer or
         'makemoneyonline.com' in referer or
         'domainsigma' in referer or
         'best-seo-offer.com' in referer or

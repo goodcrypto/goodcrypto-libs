@@ -435,8 +435,8 @@ class elapsed_time(object):
 def date_string_to_date(date_string):
     ''' Convert a string representation of a date into a python date.
 
-        >>> date_string_to_date('2015-01-14')
-        datetime.date(2015, 1, 14)
+        >>> date_string_to_date('2015-04-25')
+        datetime.date(2015, 4, 25)
         >>> date_string_to_date('14-01-2015')
         datetime.date(2015, 1, 14)
         >>> date_string_to_date('test')

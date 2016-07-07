@@ -1,27 +1,72 @@
 #!/usr/bin/env python
 '''
-    Prepare a MIME message.
+    Prepare and send a MIME message.
     
     Copyright 2015 GoodCrypto
-    Last modified: 2015-04-10
+    Last modified: 2015-07-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-
-import os, time
+import os, sh, time
 from email.Encoders import encode_base64
+from email.message import Message
 from email.mime.text import MIMEText
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEBase import MIMEBase
 from traceback import format_exc
 
 from syr import mime_constants
+from syr.lock import locked
 from syr.log import get_log
 
 log = get_log()
 
 
-def prep_mime_message(from_address, to_address, subject, text=None, attachment=None, filename=None):
+
+def send_mime_message(sender, recipient, message, use_smtp_proxy=False, mta_address=None, mta_port=None):
+    ''' 
+        Send a message. 
+    
+        The message can be a Message in string format or of the Message class.
+    '''
+
+    result_ok = False
+    msg = None
+
+    # syr.lock.locked() is only a per-process lock
+    # syr.lock has a system wide lock, but it is not well tested
+    with locked():
+        try:
+            if message is None:
+                result_ok = False
+                log('nothing to send')
+            else:
+                if type(message) == Message:
+                    msg = message.as_string()
+                else:
+                    msg = message
+
+                log('starting to send message')
+                if use_smtp_proxy and mta_address is not None and mta_port is not None:
+                    server = SMTP(mta_address, mta_port)
+                    #server.set_debuglevel(1)
+                    server.sendmail(sender, recipient, msg)
+                    server.quit()
+                else:
+                    sendmail = sh.Command('/usr/sbin/sendmail')
+                    sendmail('-B', '8BITMIME', '-f', sender, recipient, _in=msg)
+    
+                result_ok = True
+                log('finished sending message')
+        except Exception as exception:
+            result_ok = False
+            log('error while sending message: {}'.format(exception))
+            raise
+
+    return result_ok, msg
+
+def prep_mime_message(
+    from_address, to_address, subject, text=None, attachment=None, filename=None, extra_headers=None):
     '''
         Creates a MIME message.
         
@@ -57,6 +102,14 @@ def prep_mime_message(from_address, to_address, subject, text=None, attachment=N
             msg[mime_constants.FROM_KEYWORD] = from_address
             msg[mime_constants.TO_KEYWORD] = to_address
             msg[mime_constants.DATE_KEYWORD] = time.strftime('%a, %e %h %Y %T %Z', time.gmtime())
+
+            try:
+                if extra_headers is not None:
+                    for (name, value) in extra_headers:
+                        msg[name] = value
+                    log('added extra headers'.format(len(extra_headers)))
+            except:
+                log(format_exc())
 
             if attachment is not None:
                 msg.attach(MIMEText(text))

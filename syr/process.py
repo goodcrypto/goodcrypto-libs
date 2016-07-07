@@ -5,12 +5,13 @@
     command line programs are more likely to have been thoroughly vetted.
 
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2015-02-11
+    Last modified: 2015-07-21
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
-import datetime, sh, time, traceback
+import datetime, os, sh, signal, thread, threading, time, traceback
+from contextlib import contextmanager
 
 import syr.times
 
@@ -46,8 +47,8 @@ def pids_from_file(path):
     return pids_from_fuser(path)
 
 def pids_from_program(program):
-    ''' Get list of pids for program. 
-    
+    ''' Get list of pids for program.
+
         Returns empty list if none
     '''
 
@@ -57,7 +58,7 @@ def pids_from_program(program):
         pids = []
     else:
         pids = [int(pid) for pid in pid_strings]
-        
+
     return pids
 
 def program_from_pid(pid):
@@ -149,14 +150,14 @@ def wait(event, timeout=None, sleep_time=1, event_args=None, event_kwargs=None):
 
         Default is to ignore exceptions except when there is a timeout.
 
-        'event' is a function. event() succeeds if it does not raise an 
-        exception. Each call to event() continues until it succeeds or 
+        'event' is a function. event() succeeds if it does not raise an
+        exception. Each call to event() continues until it succeeds or
         raises an exception. It is not interrupted if it times out.
 
-        'timeout' can be in seconds as an int or float, or a 
-        datetime.timedelta, or a datetime.datetime. Default is None, which 
-        means no timeout. If the timeout deadline passes while event() is 
-        running, event() is not interrupted. If event() times out while 
+        'timeout' can be in seconds as an int or float, or a
+        datetime.timedelta, or a datetime.datetime. Default is None, which
+        means no timeout. If the timeout deadline passes while event() is
+        running, event() is not interrupted. If event() times out while
         running and does not succeed, wait() raises the exception from event().
 
         'sleep_time' is in seconds. Default is one.
@@ -164,7 +165,7 @@ def wait(event, timeout=None, sleep_time=1, event_args=None, event_kwargs=None):
         'event_args' is an list of positional args to event(). Default is None.
         'event_kwargs' is an dict of keyword args to event(). Default is None.
 
-        Returns result from event() if no timeout, or if timeout returns last exception. 
+        Returns result from event() if no timeout, or if timeout returns last exception.
     '''
 
     def timed_out():
@@ -198,7 +199,7 @@ def wait(event, timeout=None, sleep_time=1, event_args=None, event_kwargs=None):
 
         except KeyboardInterrupt:
             raise
-            
+
         except:
             if timed_out():
                 log.debug('wait() timed out with exception: {}'.
@@ -215,6 +216,75 @@ def wait(event, timeout=None, sleep_time=1, event_args=None, event_kwargs=None):
             time.sleep(sleep_time)
 
     return result
+
+@contextmanager
+def fork_child():
+    ''' Context manager to run a forked child process.
+
+        Subprocess returns a process result code of 0 on success,
+        or -1 if the child block raises an exception.
+
+        >>> parent_pid = os.getpid()
+        >>> # if child process
+        >>> if os.fork() == 0:
+        ...     with fork_child():
+        ...         # child process code goes here
+        ...         assert parent_pid != os.getpid()
+        >>> assert parent_pid == os.getpid()
+    '''
+
+    """ Including "if os.fork() == 0:" in the context manager results in::
+
+            RuntimeError: generator didn't yield
+    """
+
+    # try to run in a new session
+    try:
+        os.setsid()
+    except:
+        pass
+
+    # continue after the calling process ends
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+    try:
+        yield
+    except:
+        result_code = -1
+    else:
+        result_code = 0
+    finally:
+        os._exit(result_code)
+
+def stop_all_threads():
+    ''' NOT WORKING
+
+        Stop all threads.
+
+        Avoid "Exception ... (most likely raised during interpreter shutdown)".
+
+        When the python interpreter exits, it clears globals before it stops
+        threads. That causes running threads die very messily. This is a
+        security risk. Call stop_all_threads() at the end of your program,
+        and before any call to sys.exit() or os._exit().
+
+        Calling thread.exit() is usually a bad idea, but it's ok in this case
+        because the threads are about to die anyway.
+
+        WARNING: This function should only be called when the python
+        interpreter is about to exit.
+
+        NOT WORKING >>> stop_all_threads()
+    '''
+
+    for thread in threading.enumerate():
+        try:
+            if not thread.daemon:
+                thread.exit()
+        except:
+            # this thread would die anyway as we exit the program, so be quiet
+            pass
+    assert not threading.enumerate(), 'Not all threads stopped'
 
 if __name__ == "__main__":
     import doctest

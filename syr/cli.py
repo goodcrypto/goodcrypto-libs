@@ -6,7 +6,7 @@
     The Commands class issues multiple commands at the command prompt.
     
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2014-12-22
+    Last modified: 2015-06-13
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -116,7 +116,8 @@ class AbstractCli(object):
         
         with locked():
             if self.line_buffer:
-                log.debug('LINE TIMED OUT after {} seconds. Possible prompt without response: "{}"'.
+                raise CliException(
+                    'LINE TIMED OUT after {} seconds. Possible prompt without response: "{}"'.
                     format(Responder.DEFAULT_MAX_TIME_TO_RECEIVE_LINE, self.line_buffer))
 
     def reset_line_timeout(self):

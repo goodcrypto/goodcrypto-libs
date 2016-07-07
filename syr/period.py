@@ -2,7 +2,7 @@
     A period of time.
    
     Copyright 2010 GoodCrypto
-    Last modified: 2013-11-11
+    Last modified: 2015-05-19
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -67,11 +67,11 @@ class Period(object):
         ''' Returns whether the time is in this period. The 'when' arg may 
             be a date, datetime, or Period.
         
-            If 'when' is a Period The 'Endpoint convention [a, b)' convention 
-            is modified. The left endpoint is included in the period as usual. 
-            But if 'when' is a period, and its start time is in the period,
-            and its end time is the same as this period's end, then 'when' 
-            is in the period.
+            If 'when' is a Period, then the 'Endpoint convention [a, b)' 
+            convention is modified. The left endpoint is included in the 
+            period as usual. But if 'when' is a period, and its start time 
+            is in the period, and its end time is the same as this period's 
+            end, then 'when' is in the period.
             
             In other words, if 'when' is a Period, it is in this period if 
             when >= start and time <= end. Otherwise 'when' is in this period 
@@ -93,7 +93,12 @@ class Period(object):
         else:
             result = in_period(when)
         return result
-        
+             
+    def __cmp__(self, other):
+        ''' Compare periods '''
+
+        return self.precise_end - self.precise_start
+
     def includes(self, when):
         ''' DEPRECATED. Use 'in' operator, e.g. 'if when in period'.
         

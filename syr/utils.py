@@ -5,8 +5,8 @@
     For example, many could go in syr.debug or syr.fs.
     But you need time to find and change the callers.
 
-    Copyright 2009-2014 GoodCrypto
-    Last modified: 2015-01-17
+    Copyright 2009-2015 GoodCrypto
+    Last modified: 2015-07-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -293,6 +293,37 @@ def winpdb_break():
     import rpdb2 #DEBUG
     log('breakpointing for winpdb')
     rpdb2.start_embedded_debugger("password") #DEBUG
+
+def generate_password(max_length=25, punctuation_chars='-_ .,!+?$#'):
+    ''' 
+        Generate a password. 
+
+        >>> len(generate_password())
+        25
+    '''
+    
+    # the password must be random, but the characters must be valid for django
+    password = ''
+    while len(password) < max_length:
+        new_char = os.urandom(1)
+        try:
+            new_char.decode('utf-8')
+            # the character must be a printable character
+            if ((new_char >= 'A' and new_char <= 'Z') or
+                (new_char >= 'a' and new_char <= 'z') or
+                (new_char >= '0' and new_char <= '9') or
+                (new_char in punction_chars)):
+            
+                # and the password must not start or end with a punctuation
+                if (new_char in punctuation_chars and 
+                    (len(password) == 0 or (len(password) + 1) == max_length)):
+                    pass
+                else:
+                    password += new_char
+        except:
+            pass
+
+    return password
 
 def cache(function):
     ''' Decorator to cache returned value.

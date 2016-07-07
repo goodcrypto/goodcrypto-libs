@@ -1,18 +1,17 @@
 '''
     File system.
 
-    Copyright 2008-2014 GoodCrypto
-    Last modified: 2015-04-12
+    Copyright 2008-2015 GoodCrypto
+    Last modified: 2015-07-14
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
-import os, os.path, sh, shutil, stat, tempfile, threading
+import os, os.path, pwd, sh, shutil, stat, tempfile, threading
 from contextlib import contextmanager
 from datetime import datetime
 
 from syr.log import get_log
-import syr.process, syr.user, syr.utils
 
 log = get_log()
 
@@ -74,9 +73,6 @@ def chmod(mode, path, recursive=False):
         Examples::
             'o+rw,g+rw'
             0660
-        
-        (Delete this warning if no errors by 2015-01-01.)
-        WARNING: Arg order used to be chmod(path, mode).
     '''
 
     # arg order used to be chmod(path, mode, ...), so check types
@@ -101,9 +97,14 @@ def chmod(mode, path, recursive=False):
 
 def chown(owner, path, recursive=False):
     ''' Change owner of path.
+    
+        'owner' can be the user name, uid as an int, or uid as a string.
 
         Log and reraise any exception.
     '''
+    
+    # import delayed to avoid infinite recursion
+    import syr.user
 
     try:
         if recursive:
@@ -116,12 +117,34 @@ def chown(owner, path, recursive=False):
             format(syr.user.whoami(), owner, path))
         log.error(sh_exception)
         raise
+        
+    # verify. after we have higher confidence, move this into doctests
+    if type(owner) is str and ':' in owner:
+        owner, group = owner.split(':')
+    else:
+        group = None
+    try:
+        uid = int(owner)
+    except ValueError:
+        uid = syr.user.getuid(owner)
+    assert getuid(path) == uid, 'uid set to {} but is {}'.format(uid, getuid(path))
+    if group is not None:
+        try:
+            gid = int(group)
+        except ValueError:
+            gid = syr.user.getgid(group)
+        assert getgid(path) == gid, 'gid set to {} but is {}'.format(gid, getgid(path))
 
 def chgrp(group, path, recursive=False):
     ''' Change group of path.
 
+        'group' can be the group name, gid as an int, or gid as a string.
+        
         Log and reraise any exception.
     '''
+    
+    # import delayed to avoid infinite recursion
+    import syr.user
 
     try:
         if recursive:
@@ -135,6 +158,23 @@ def chgrp(group, path, recursive=False):
         log.error(sh_exception)
         raise
 
+    # verify. after we have higher confidence, move this into doctests
+    if type(group) is str and ':' in group:
+        owner, group = group.split(':')
+    else:
+        owner = None
+    if owner is not None:
+        try:
+            uid = int(owner)
+        except ValueError:
+            uid = syr.user.getuid(owner)
+        assert getuid(path) == uid, 'uid set to {} but is {}'.format(uid, getuid(path))
+    try:
+        gid = int(group)
+    except ValueError:
+        gid = syr.user.getgid(group)
+    assert getgid(path) == gid, 'gid set to {} but is {}'.format(gid, getgid(path))
+    
 def getmode(path):
     ''' Return permissions (mode) of a path.
 
@@ -147,20 +187,31 @@ def getmode(path):
 def getuid(path):
     ''' Return uid of a path. '''
 
-    os.stat(path).st_uid
+    return os.stat(path).st_uid
 
 def getgid(path):
-    ''' Return uid of a path. '''
+    ''' Return gid of a path. '''
 
-    os.stat(path).st_uid
+    return os.stat(path).st_gid
+
+def set_attributes(path, owner=None, group=None, perms=None, recursive=False):
+    ''' Set ownership and permissions. '''
+    
+    if owner is not None:
+        chown(owner, path, recursive)
+    if group is not None:
+        chgrp(group, path, recursive)
+    if perms is not None:
+        chmod(perms, path, recursive)
 
 def makedir(dirname, owner=None, group=None, perms=None):
-    ''' Make dir with correct ownership and permissions.
+    ''' Make dir with default ownership and permissions.
 
-        Makes parent dirs if needed.
+        Makes parent dirs if needed. If dir already exists, ownership 
+        and permissions are not changed.
     '''
 
-    if not perms:
+    if perms is None:
         perms = DEFAULT_PERMISSIONS_DIR
 
     lock = threading.Lock()
@@ -174,18 +225,11 @@ def makedir(dirname, owner=None, group=None, perms=None):
             #    dirname, owner, group, oct(perms))) #DEBUG
             try:
                 os.makedirs(dirname)
-                chmod(perms, dirname, recursive=True)
             except OSError:
                 log.error(why_file_permission_denied(dirname, perms))
                 raise
-
-            # set ownership and permissions
-            if owner:
-                chown(owner, dirname, recursive=True)
-            if group:
-                chgrp(group, dirname, recursive=True)
-            chmod(perms, dirname)
-            #log.debug('ls -l {})'.format(sh.ls('-ld', dirname))) #DEBUG
+            else:
+                set_attributes(dirname, owner, group, perms, recursive=True)
 
     finally:
         lock.release()
@@ -215,7 +259,10 @@ def temp_mount(*args, **kwargs):
 
     """ Needs more tests, especially for --bind/move/make-xxx with sh.umount(args[-1]) """
 
-    with sh.sudo:
+    # import delayed to avoid infinite recursion
+    import syr.user
+    
+    with syr.user.sudo():
         sh.mount(*args, **kwargs)
 
     try:
@@ -225,7 +272,7 @@ def temp_mount(*args, **kwargs):
         # the last arg is reliably the mount point
         # even with --bind, --move, etc.
         mount_point = os.path.abspath(args[-1])
-        with sh.sudo:
+        with syr.user.sudo():
             sh.umount(mount_point)
 
 def mounts():
@@ -240,8 +287,11 @@ def mounts():
         disabled>>> assert 'proc' in repr(m)
     """
 
+    # import delayed to avoid infinite recursion
+    import syr.user
+    
     results = []
-    with sh.sudo:
+    with syr.user.sudo():
 
         with open('/etc/mtab') as mtab:
             for line in mtab:
@@ -274,6 +324,8 @@ def umount_all(dirname):
 
         """
         if mounted(dir):
+            # import delayed to avoid infinite recursion
+            import syr.process
             log.debug('unable to unmount {}, opened by {}'.format(
                 dir,
                 syr.process.program_from_file(dir)))
@@ -291,8 +343,11 @@ def mounted(path):
 def match_parent_owner(path, mode=None):
     ''' Chown to the parent dir's uid and gid.
 
-        If mode is present, it is an integer passed to chmod(). '''
+        If mode is present, it is passed to chmod(). '''
 
+    # import delayed to avoid infinite recursion
+    import syr.user
+    
     try:
         statinfo = os.stat(os.path.dirname(path))
         os.chown(path, statinfo.st_uid, statinfo.st_gid)
@@ -305,21 +360,36 @@ def match_parent_owner(path, mode=None):
     finally:
         if mode is not None:
             chmod(mode, path)
-
+            
 def get_unique_filename(dirname, prefix, suffix):
-    '''Get a unique filename.'''
+    '''
+        Get a unique filename.
+        
+        >>> dirname = '/tmp'
+        >>> prefix = 'test'
+        >>> suffix = 'txt'
+        >>> filename = get_unique_filename(dirname, prefix, suffix)
+        >>> len(filename) > 0
+        True
+        >>> filename = get_unique_filename(dirname, prefix, suffix)
+        >>> len(filename) > 0
+        True
+        >>> filename = get_unique_filename(dirname, prefix, suffix)
+        >>> len(filename) > 0
+        True
+    '''
 
     now = datetime.now()
-    base_filename = '%s-%d-%02d-%02d-%02d-%02d-%02d' % \
-     (prefix, now.year, now.month, now.day, now.hour, now.minute, now.second)
-    filename = '%s.%s' % (base_filename, suffix)
+    base_filename = '%s-%d-%02d-%02d-%02d-%02d-%02d' % (
+     prefix, now.year, now.month, now.day, now.hour, now.minute, now.second)
+    filename = '{}.{}'.format(base_filename, suffix)
 
     if os.path.exists(os.path.join(dirname, filename)):
         i = 1
         filename = '%s-%02d.%s' % (base_filename, i, suffix)
         while os.path.exists(os.path.join(dirname, filename)):
             i += 1
-            filename = base_filename + '%s-%02d.%s' % (base_filename, i, suffix)
+            filename = '%s-%02d.%s' % (base_filename, i, suffix)
 
     return os.path.join(dirname, filename)
 
@@ -383,7 +453,7 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
         >>> assert os.path.exists(file1_in_dir3)
     '''
 
-    #log.debug('copy(source={}, dest={}, symlinks=={}, ignore=={}, owner=={}, group=={}, perms=={})'.
+    # log.debug('copy(source={}, dest={}, symlinks=={}, ignore=={}, owner=={}, group=={}, perms=={})'.
     #    format(source, dest, symlinks, ignore, owner, group, perms))
 
     # source must exist, but a dangling link is acceptable
@@ -414,25 +484,21 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
 
             umount_all(source)
 
-            # if there's no reason to traverse the dir tree
-            if (symlinks is True and ignore is None and
-                owner is None and group is None and perms is None):
+            if (symlinks is True and ignore is None):
                 sh.cp(source, dest, archive=True)
+                set_attributes(dest, owner, group, perms, recursive=True)
 
             else:
                 makedir(dest)
                 # copystat does *not* affect owner and group
                 shutil.copystat(source, dest)
-                if owner:
-                    chown(owner, dest)
-                if group:
-                    chgrp(group, dest)
+                set_attributes(dest, owner=owner, group=group, recursive=True)
 
                 files = os.listdir(source)
-                if ignore:
-                    ignored = ignore(source, files)
-                else:
+                if ignore is None:
                     ignored = []
+                else:
+                    ignored = ignore(source, files)
 
                 for file in files:
 
@@ -443,20 +509,15 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
 
         else:
             sh.cp(source, dest, preserve='all')
-            log.debug('cp results: dest={}, owner=={}, group=={}, perms=={})'.
-                format(dest, os.stat(dest).st_uid, os.stat(dest).st_gid, oct(getmode(dest))))
-            # delete these 2 lines if the cp --preserve above works
+            # delete these 2 lines if unused by 2015-09-01
             #shutil.copy(source, dest)
             #shutil.copystat(source, dest)
-            if owner:
-                chown(owner, dest)
-            if group:
-                chgrp(group, dest)
-            if perms:
-                chmod(perms, dest)
-            log.debug('copy results: dest={}, owner=={}, group=={}, perms=={}, set perms=={})'.
-                format(dest, os.stat(dest).st_uid, os.stat(dest).st_gid, oct(getmode(dest)), perms))
-
+            
+            set_attributes(dest, owner, group, perms, recursive=True)
+            
+    # log.debug('after copy: dest={}, owner=={}, group=={}, perms=={})'.
+    #     format(dest, os.stat(dest).st_uid, os.stat(dest).st_gid, oct(getmode(dest))))
+            
 def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms=None):
     ''' Merge source to dest dir.
 
@@ -512,10 +573,7 @@ def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perm
                 else:
                     #log.debug('merge() copy2({}, {})'.format(sourcename, destname)) #DEBUG
                     shutil.copy2(sourcename, destname)
-                    if owner:
-                        chown(owner, destname)
-                    if group:
-                        chgrp(group, destname)
+                    set_attributes(destname, owner=owner, group=group, recursive=True)
 
                     mode = perms or getmode(sourcename)
                     #log.debug('  src mode: {}'.format(oct(getmode(sourcename)))) #DEBUG
@@ -591,13 +649,7 @@ def move(source, dest, owner=None, group=None, perms=None):
     if not os.path.exists(parent_dir):
         makedir(parent_dir, owner=owner, group=None, perms=None)
     sh.mv('--force', source, dest)
-
-    if owner:
-        chown(owner, dest)
-    if group:
-        chgrp(group, dest)
-    if perms:
-        chmod(perms, dest)
+    set_attributes(dest, owner, group, perms, recursive=True)
 
 def clonedirs(sourceroot, destroot, destdir, owner=None, group=None, perms=None):
     ''' Make destdir within destroot. Make any needed intermediate-level
@@ -667,12 +719,8 @@ def clonedirs(sourceroot, destroot, destdir, owner=None, group=None, perms=None)
         clonedirs(sourceroot, destroot, parent, owner, group, perms)
 
         perms = perms or getmode(sourcepath)
-        makedir(destpath, perms=perms)
-
-        if owner:
-            chown(owner, destpath)
-        if group:
-            chgrp(group, destpath)
+        makedir(destpath)
+        set_attributes(destpath, owner, group, perms, recursive=True)
 
 def remove(path):
     ''' Remove the path.
@@ -834,6 +882,9 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
         >>> os.remove(f.name)
     """
     
+    # import delayed to avoid infinite recursion
+    import syr.utils
+    
     # read text
     mode = os.stat(filename).st_mode
     with open(filename) as textfile:
@@ -857,58 +908,52 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
 def why_file_permission_denied(pathname, mode='r'):
     ''' Return string saying why file access didn't work.
     
-        If permission is not denied, returns None.
+        If permission is allowed, returns None.
         
         If present, the mode parameter is one or more of the characters 
         'r', 'w', 'x', '+' for 'read', 'write', 'execute', and 'append'.  
         
         '+' is treated as 'w'. '''
     
+    # import delayed to avoid infinite recursion
+    import syr.user
+    
     if type(mode) == int:
         mode = filemode(mode)
                 
     reason = None
-    permission = False
     while pathname and reason is None:
+    
+        #print('{} mode: {}'.format(pathname, filemode(stat_info.st_mode))) #DEBUG
         
-        try:
-            stat_info = os.stat(pathname)
+        for perm in mode:
             
-        except:
-            # if os.stat fails it 's probably because of a dir in the path
-            pass
-            #reason = 'os.stat() failed for {}'.format(pathname)
-            
-        else:
-            
-            #print('{} mode: {}'.format(pathname, filemode(stat_info.st_mode))) #DEBUG
-            
-            for perm in mode:
-                
-                if os.path.isdir(pathname):
-                    try:
-                        # 'x' is search, but is this right for 'r'?
-                        if perm == 'r' or perm == 'x':
-                            os.listdir(pathname)
-                        else:
-                            f = TemporaryFile(dir=pathname)
-                            f.close()
-                        permission = True
-                    except:
-                        reason = 'no "{}" access for {}'.format(perm, pathname)
-                        
-                else:
-                    try:
-                        f = open(pathname, mode)
+            if os.path.isdir(pathname):
+                try:
+                    # 'x' is search, but is this right for 'r'?
+                    if perm == 'r' or perm == 'x':
+                        os.listdir(pathname)
+                    else:
+                        # test for write
+                        f = TemporaryFile(dir=pathname)
                         f.close()
-                        permission = True
-                    except:
-                        reason = 'no "{}" access for {}'.format(perm, pathname)
+                except:
+                    reason = 'no "{}" access for {}'.format(perm, pathname)
+                    
+            else:
+                try:
+                    f = open(pathname, mode)
+                    f.close()
+                except:
+                    reason = 'no "{}" access for {}'.format(perm, pathname)
                 
         if pathname:
             # remove last component of pathname
             parts = pathname.split('/')
             pathname = '/'.join(parts[:-1])
+    
+    if reason:
+        reason += ' as user {}'.format(syr.user.whoami())
         
     return reason
     

@@ -2,7 +2,7 @@
     Net utilities.
 
     Copyright 2014 GoodCrypto
-    Last modified: 2014-12-02
+    Last modified: 2015-07-19
     
     There is some inconsistency in function naming.
 
@@ -28,40 +28,46 @@ def hostname():
     return socket.gethostname()
     
 def hostaddress():
-    ''' Get the host ip address. 
-    '''
+    ''' Get the host ip address. '''
     
     ip = None
+    
+    host = hostname()
+    log.debug('host: {}'.format(host))
+    
     try:
-        ip_by_name = socket.gethostbyname(hostname())
+        host_by_name = socket.gethostbyname(host)
                 
     except socket.gaierror:       
-        log.debug('no address for hostname: {}'.format(hostname()))
+        log.debug('no address for hostname: {}'.format(host))
         
-    else:            
-        if ip_by_name == '127.0.0.1':   
-            log.debug('hostname has address of 127.0.0.1: {}'.format(hostname()))
+    else:               
+        log.debug('host by name: {}'.format(host_by_name))
 
+        # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
+        interface = interface_from_ip(host_by_name)
+        
+        if interface and not interface == 'lo':    
+            log.debug('setting ip to host by name: {}'.format(host_by_name))
+            ip = host_by_name
         else:
-            # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
-            interface = interface_from_ip(ip_by_name)
-            
-            if interface:
-                ip = ip_by_name
-            else:
-                raise Exception(
-                    'socket.gethostbyname(hostname()) returned {}, but no interface has that address. Is /etc/hosts wrong?'
-                    .format(ip_by_name))
+            log.warning('socket.gethostbyname(hostname()) returned {}, '.format(host_by_name) +
+                'but no interface has that address. Is /etc/hosts wrong?')
         
     if not ip:
-        # find first net device with an ip address, excluding 'lo'
+        # use the first net device with an ip address, excluding 'lo'
         for interface in interfaces():
             if not ip:
-                if interface != 'lo':
+                if interface != 'lo':    
                     ip = device_address(interface)
+                    log.debug('set ip to {} from first net device {}'.format(ip, interface))
                     
-    if not ip:
-        raise Exception('no ip address')
+    if ip:
+        log.debug('ip address: {}'.format(ip))
+    else:
+        msg = 'no ip address'
+        log.debug(msg)
+        raise Exception(msg)
             
     return ip
     
@@ -163,7 +169,7 @@ def set_etc_hosts_address(hostname, ip):
 
 
 def torify(host=None, port=None):
-    ''' Use tor. 
+    ''' Use tor for all python sockets. 
     
         You must call torify() very early in your app, before importing 
         any modules that may do network io.
@@ -183,7 +189,9 @@ def torify(host=None, port=None):
     try:
         import socks
     except:
-        raise Exception('Requires the socks module from SocksiPy')
+        msg = 'Requires the socks module from SocksiPy'
+        log.debug(msg)
+        raise Exception(msg)
         
     def create_connection(address, timeout=None, source_address=None):
         assert socket.socket == socks.socksocket
@@ -202,10 +210,10 @@ def torify(host=None, port=None):
     socket.create_connection = create_connection
     log('socket.socket and socket.create_connection now go through tor')
     
-def send_api_request(url, params):
+def send_api_request(url, params, proxy_dict=None):
     '''Send a post to a url and get the response.'''
     
-    page = post_data(url, params)
+    page = post_data(url, params, proxy_dict=proxy_dict)
     
     if page is None:
         body_text = ''
@@ -218,18 +226,27 @@ def send_api_request(url, params):
         
     return body_text
 
-def post_data(full_url, params):
+def post_data(full_url, params, proxy_dict=None):
     '''
         Send a post to a url and return the data.
         
         >>> page = post_data('https://goodcrypto.com', '')
-        >>> page
+        >>> page is not None
+        True
+        >>> page = post_data('https://goodcrypto.com', '', proxy_dict={'https': 'http://127.0.0.1:8398'})
+        >>> page is not None
+        True
     '''
     
     page = None
 
     try:
-        opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
+        if proxy_dict is None:
+            opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
+        else:
+            proxy_handler = urllib2.ProxyHandler(proxy_dict)
+            opener = urllib2.build_opener(proxy_handler, urllib2.HTTPCookieProcessor(CookieJar()))
+
         request = urllib2.Request(full_url, urlencode(params))
         handle = opener.open(request)
         page = handle.read()
