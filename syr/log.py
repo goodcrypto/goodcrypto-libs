@@ -40,13 +40,12 @@ from __future__ import print_function
 
     If a program that doesn't use syr.log needs to access a log directory
     in /var/local/log, you may need to create /var/local/log/USER in advance.
-    Make sure USER owns it.
 
     Bugs:
         Log.info() can write to more than one log.
 
     Copyright 2008-2015 GoodCrypto
-    Last modified: 2015-08-03
+    Last modified: 2015-11-19
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -94,10 +93,13 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
-import atexit, logging, os, os.path, sh, shutil, smtplib, stat, sys, tempfile, threading, time
+import atexit, logging, os, os.path, pwd, sh, shutil, smtplib, stat, sys
+import tempfile, threading, time, traceback
 from threading import Thread
 from traceback import format_exc, format_stack
 from glob import glob
+
+import syr._log
 
 # analogous to /var/log
 BASE_LOG_DIR = '/var/local/log'
@@ -124,7 +126,7 @@ _raise_logging_errors = False
 #          errors and cost you days of debugging. Leave _DEBUGGING set to
 #          False except when you're explicitly debugging this module.
 _DEBUGGING = False
-_DEBUGGING_LOG_REMOVE_DISABLE = True
+_DEBUGGING_LOG_REMOVE_DISABLE = False
 
 _DEFAULT_LOG_DIR_PERMS = 0755
 _DEFAULT_PERMS = 0644
@@ -147,7 +149,7 @@ logging.getLogger('').addHandler(null_handler)
 '''
 basic_logging_file = tempfile.NamedTemporaryFile(
     mode='a',
-    prefix='python.default.', suffix='.log',
+    prefix='syr.logs.default.', suffix='.log',
     delete=True)
 os.chmod(basic_logging_file.name, 0666)
 logging.basicConfig(level=logging.DEBUG,
@@ -156,27 +158,9 @@ logging.basicConfig(level=logging.DEBUG,
                     # python logging closes the stream
                     # stream=open(os.devnull, 'a'))
                     stream=basic_logging_file)
-
 def _debug(message, force=False, filename=None, mode=None):
     if force or _DEBUGGING:
-
-        if filename is None:
-            filename = '/tmp/syr.log.debug.{}.log'.format(whoami())
-        if mode is None:
-            mode = '0666'
-
-        # print(message)
-        sh.touch(filename)
-        try:
-            sh.chmod(mode, filename)
-        except sh.ErrorReturnCode_1:
-            # hopefully the perms are already ok
-            pass
-        with open(filename, 'a') as log:
-            ct = time.time()
-            milliseconds = int((ct - long(ct)) * 1000)
-            t = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
-            log.write('{},{:03} {}\n'.format(t, milliseconds, message))
+        syr._log.log(message, filename=filename, mode=mode)
 
 '''
     For speed, tested log messages queued and written to
@@ -273,29 +257,45 @@ class _Log(object):
     filename = None
 
 
-    def __init__(self, filename=None, dirname=None, group=None, recreate=False, noisy=False):
+    def __init__(self,
+        filename=None, dirname=None, group=None,
+        recreate=False, verbose=False, audible=False):
+        ''' 'filename' is an explicit filename.
+            'dirname' is the dir to use with the default log file basename.
+            'group' is the group that wns the lof file. Defaults to the group
+            for the current user.
+            'recreate' will delete any existing log before use.
+            'verbose' prints log entries to stdout. The 'verbose' keyword can
+            be overridden for a log entry.
+            If audible=True, the command line 'say' program will be called
+            with the message.
+       '''
 
         self.filename = filename
         self.dirname = dirname
         self.group = group
         self.user = None
         self.recreate = recreate
-        self.noisy = noisy
+        self.verbose = verbose
+        self.audible = audible
 
         self.handler = None
         self.opened = False
         self.debugging = False
         self.stdout_stack = []
 
-    def __call__(self, message, verbose=False, say_message=False, exception=False):
+    def __call__(self, message, verbose=None, audible=None, exception=None):
         ''' Output log message, optionally also to stdout and audibly.
 
-            If verbose=True, the message will also be printed to stdout.
+            If verbose=True, this log message will also be printed to stdout.
+            If verbose=False, this message will not printed to stdout, even if
+            the log was initialized with verbose=True. Default is None, which
+            uses the verbose value passed to Log() or get_log(, if any).
 
-            If say_message=True, the command line 'say' program will be called
-            with the message. Since voice generation can be nearly
-            unintelligible, it generally should be very short and used
-            infrequently.
+            If audible=True, the command line 'say' program will be called
+            with the message. Otherwise audible is similar to verbose. Since
+            voice generation can be nearly unintelligible, the message should
+            be very short and used infrequently.
 
             If exception=True, the last exception will be logged.
         '''
@@ -304,10 +304,14 @@ class _Log(object):
 
         if not self.is_master():
 
+            if verbose is None:
+                verbose = self.verbose
             if verbose:
-                print(message)
+                print('{} {}'.format(syr._log.timestamp(), message))
 
-            if say_message:
+            if audible is None:
+                audible = self.audible
+            if audible:
                 try:
                     from syr.utils import say
                     say(message)
@@ -348,7 +352,7 @@ class _Log(object):
             message = self.no_control_chars(message)
             self._write(message)
 
-            if self.noisy:
+            if self.verbose:
                 print(message)
             if _use_master_log and not self.is_master():
                 try:
@@ -393,6 +397,32 @@ class _Log(object):
 
     def debug(self, msg, *args, **kwargs):
         ''' Compatibility with standard python logging. '''
+
+        # for debug log entries, if the message is an Exception
+        # then log everything we know
+        if isinstance(msg, Exception):
+
+            # log any Exception args
+            try:
+                msg.args
+            except AttributeError:
+                pass
+            else:
+                if type(msg.args) is tuple:
+                    self.debug(' '.join(map(str, list(msg.args))))
+                else:
+                    self.debug(msg.args)
+
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            if exc_value == msg:
+                # in python 2.7 traceback.format_exception() does not perform as docced
+                # it does not format the entire stack
+                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                msg = ''.join(lines).strip()
+            else:
+                # the msg Exception is not the most recent, so no traceback
+                self.debug('log.debug() called with an exception but no traceback available')
+                msg = traceback.format_exception_only(type(msg), msg)
 
         self.log('DEBUG', msg, *args, **kwargs)
 
@@ -533,10 +563,10 @@ class _Log(object):
             We don't want to stop a program because of a log error
         '''
 
-        import syr.utils
+        import syr.python
 
         try:
-            _debug(syr.utils.last_exception(), force=True)
+            _debug(syr.python.last_exception(), force=True)
         except:
             pass
 
@@ -552,7 +582,7 @@ class _Log(object):
             Each user has its own separate set of logs.
         '''
 
-        current_user = whoami()
+        current_user = syr._log.whoami()
         if self.user is None:
             self.user = current_user
         elif self.user != current_user:
@@ -574,7 +604,7 @@ class _Log(object):
             newtext = newtext + ch
         return newtext
 
-def get_log(filename=None, dirname=None, group=None, recreate=False):
+def get_log(filename=None, dirname=None, group=None, recreate=False, verbose=False):
     ''' Returns an instance of _Log().
 
         The default log path is "BASE_LOG_DIR/USER/MODULE.log".
@@ -592,7 +622,7 @@ def get_log(filename=None, dirname=None, group=None, recreate=False):
         >>> from syr.log import get_log
         >>> log = get_log('testlog3.log')
         >>> log('log message')
-        >>> user_log_dir = os.path.join(BASE_LOG_DIR, whoami())
+        >>> user_log_dir = os.path.join(BASE_LOG_DIR, syr._log.whoami())
         >>> assert os.path.dirname(log.pathname) == user_log_dir
 
         >>> log = get_log('testlog1.log', dirname='/tmp/logs')
@@ -616,7 +646,9 @@ def get_log(filename=None, dirname=None, group=None, recreate=False):
             log = logs[logpath]
 
         else:
-            log = _Log(filename=filename, dirname=dirname, group=group, recreate=recreate)
+            log = _Log(
+                filename=filename, dirname=dirname,
+                group=group, recreate=recreate, verbose=verbose)
             logs[logpath] = log
 
     return log
@@ -642,7 +674,7 @@ def get_log_path(filename=None, dirname=None):
 
         >>> path = get_log_path('testlog3.log')
         >>> assert os.path.basename(path) == 'testlog3.log'
-        >>> assert os.path.dirname(path) == os.path.join(BASE_LOG_DIR, whoami())
+        >>> assert os.path.dirname(path) == os.path.join(BASE_LOG_DIR, syr._log.whoami())
     '''
 
     if filename is None:
@@ -672,7 +704,7 @@ def default_log_dir():
     '''
 
     create_base_log_dir()
-    user = whoami()
+    user = syr._log.whoami()
     dirname = os.path.join(BASE_LOG_DIR, user)
     makedir(dirname)
     return dirname
@@ -718,7 +750,7 @@ def create_base_log_dir():
     if not os.path.exists(BASE_LOG_DIR):
 
         # BASE_LOG_DIR must be created by root
-        if whoami() != 'root':
+        if syr._log.whoami() != 'root':
             sys.exit('As root, run "mkdir --parents --mode={} {}", then chmod {} {}'.
                 format(
                     oct(BASE_LOG_DIR_PERMS), BASE_LOG_DIR),
@@ -739,12 +771,6 @@ def makedir(dirname, perms=_DEFAULT_LOG_DIR_PERMS):
             _debug(why, force=True)
             raise
     assert os.path.isdir(dirname)
-
-def whoami():
-    ''' Get user '''
-
-    # syr.user.whoami() not used to avoid recursive imports
-    return sh.whoami().stdout.strip()
 
 if __name__ == "__main__":
 

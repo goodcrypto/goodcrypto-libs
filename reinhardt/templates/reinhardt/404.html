@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% comment %}
+    Copyright 2014-2015 GoodCrypto
+    Last modified: 2015-04-10
+{% endcomment %}
+{% load i18n custom %}
+
+{% block meta_keywords %}
+    <meta name="Keywords" content="page not found">
+{% endblock meta_keywords %}
+{% block meta_description %}
+    <meta name="Description" content="Error: Unable to find page.">
+{% endblock meta_description %}
+
+{% block titlevar %} 
+    Page Not Found
+{% endblock %}
+
+{% block contentpane %}
+
+    <h1 class="headline">
+        Document Not Found
+    </h1>
+
+    <div class="col-md-12">
+    
+        <div class="row">&nbsp;</div>
+        
+        <div class="row">
+        <p class="dropcap">Please remember to use 
+        upper and lower case when entering an internet
+        address. Be sure that your browser doesn't collapse case 
+        before requesting a web page.</p>
+        </div>
+    
+        <div class="row">
+        <h3>You can:</h3>
+        </div>
+        
+        <ul>
+            <li><a href="/contacts/">send e-mail</a> requesting help to support</li>
+        
+            <li>simply start with the <a href="/">home page</a> and use the menus</li>
+        </ul>
+    </div>
+    
+{% endblock contentpane %}
+

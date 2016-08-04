@@ -1,0 +1,77 @@
+{% extends "reinhardt/base_content.html" %}
+{% comment %}
+
+    Copyright (c) 2009-2015 GoodCrypto
+    Last modified: 2015-03-29
+        
+{% endcomment %}
+{% load i18n bootstrap custom %}
+
+{% block titlevar %} 
+    {% trans 'Sign in' %}
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    {% include 'reinhardt/snippets/css_basic.html' %}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% include 'reinhardt/snippets/js_basic.html' %}
+    <script type="text/javascript" src="{% static 'js/admin_js.js' %}"></script>
+{% endblock extrahead %}
+
+{% block bodyclass %}login{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block body-content %}
+    {% block content %}
+    <div>
+        <h3>
+        <br/>
+        {% block signin_headline %}
+        {% include 'snippets/sign_in_tag.html' %}
+        {% endblock signin_headline %}
+        </h3>
+      
+        <div class="col-md-7">
+           <form action="/sign_in/" method="post" id="login-form" role="form">
+                {% csrf_token %}
+                {{ form|bootstrap_horizontal }}
+
+                <input type="hidden" name="this_is_the_login_form" value="1"/>
+                <input type="hidden" name="next" value="{{ next }}"/>
+                
+                <div class="col-md-2">&nbsp;</div>
+                <div class="col-md-4">
+                <div class="form-group">
+                    <div class=" control-label col-sm-2 col-lg-2 ">&nbsp;</div>
+                    <div class=" col-sm-10 col-lg-10 ">
+                    {% block signin_button %}
+                        <input 
+                            type="submit" 
+                            class="btn btn-primary btn-large" 
+                            value="{% trans 'Sign in' %}"
+                            name="_signin" 
+                            alt="{% trans 'Sign in' %}" 
+                            title="{% trans 'Use the credentials emailed to you.' %}"/>
+                       {% endblock signin_button %}
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <script type="text/javascript">
+        document.getElementById('id_username').focus()
+        </script>
+        </div>
+    </div>
+    {% endblock content %}
+{% endblock body-content %}
+

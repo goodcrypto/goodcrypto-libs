@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 '''
     Prepare and send a MIME message.
-    
+
     Copyright 2015 GoodCrypto
-    Last modified: 2015-07-01
+    Last modified: 2015-11-11
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -21,13 +21,13 @@ from syr.log import get_log
 
 log = get_log()
 
-
+DEBUGGING = False
 
 def send_mime_message(sender, recipient, message, use_smtp_proxy=False, mta_address=None, mta_port=None):
-    ''' 
-        Send a message. 
-    
-        The message can be a Message in string format or of the Message class.
+    '''
+        Send a message.
+
+        The message can be a Message in string format or of the email.Message class.
     '''
 
     result_ok = False
@@ -46,18 +46,19 @@ def send_mime_message(sender, recipient, message, use_smtp_proxy=False, mta_addr
                 else:
                     msg = message
 
-                log('starting to send message')
                 if use_smtp_proxy and mta_address is not None and mta_port is not None:
                     server = SMTP(mta_address, mta_port)
                     #server.set_debuglevel(1)
                     server.sendmail(sender, recipient, msg)
                     server.quit()
                 else:
+                    if DEBUGGING:
+                        log('sendmail -B 8BITMIME -f {} {}'.format(sender, recipient))
+                        log('msg:\n{}'.format(msg))
                     sendmail = sh.Command('/usr/sbin/sendmail')
                     sendmail('-B', '8BITMIME', '-f', sender, recipient, _in=msg)
-    
+
                 result_ok = True
-                log('finished sending message')
         except Exception as exception:
             result_ok = False
             log('error while sending message: {}'.format(exception))
@@ -69,7 +70,7 @@ def prep_mime_message(
     from_address, to_address, subject, text=None, attachment=None, filename=None, extra_headers=None):
     '''
         Creates a MIME message.
-        
+
         >>> # In honor of Sukhbir Singh, developed and maintains TorBirdy.
         >>> message = create_notice_message(
         ...    'mailer-daemon@goodcrypto.remote', 'sukhbir@goodcrypto.remote', 'test notice')
@@ -89,7 +90,7 @@ def prep_mime_message(
             text = subject
         elif type(text) == list:
             text = '\n'.join(text)
-    
+
         try:
             if attachment is None:
                 msg = MIMEText(text)
@@ -113,7 +114,7 @@ def prep_mime_message(
 
             if attachment is not None:
                 msg.attach(MIMEText(text))
-    
+
                 payload = MIMEBase('application', "octet-stream")
                 payload.set_payload(attachment)
                 encode_base64(payload)

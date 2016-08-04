@@ -2,7 +2,7 @@
     File system.
 
     Copyright 2008-2015 GoodCrypto
-    Last modified: 2015-07-14
+    Last modified: 2015-12-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -17,13 +17,13 @@ log = get_log()
 
 empty_dir = None
 
-DEFAULT_PERMISSIONS_DIR_OCTAL = 0775
-DEFAULT_PERMISSIONS_FILE_OCTAL = 0660
+DEFAULT_PERMISSIONS_DIR_OCTAL = 0755
+DEFAULT_PERMISSIONS_FILE_OCTAL = 0640
 # use strings with chmod command, sh.chmod(), and syr.fs.chmod()
-DEFAULT_PERMISSIONS_DIR = 'u=rwX,g=rwX,o=rX'
-DEFAULT_PERMISSIONS_FILE = 'u=rw,g=rw,o='
-""" This produces an unreadable int and ignores the difference in 
-    chmod between 'x' and 'X'. 
+DEFAULT_PERMISSIONS_DIR = 'u=rwX,g=rX,o=rX'
+DEFAULT_PERMISSIONS_FILE = 'u=rw,g=r,o='
+''' This produces an unreadable int and ignores the difference in
+    chmod between 'x' and 'X'.
 try:
     DEFAULT_PERMISSIONS_DIR = (
         stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |
@@ -38,9 +38,9 @@ try:
 except:
     DEFAULT_PERMISSIONS_DIR = DEFAULT_PERMISSIONS_DIR_OCTAL
     DEFAULT_PERMISSIONS_FILE = DEFAULT_PERMISSIONS_FILE_OCTAL
-"""
+'''
 
-class OpSysException(Exception):
+class FileSystemException(Exception):
     pass
 
 @contextmanager
@@ -69,7 +69,7 @@ def cd(dirname):
 def chmod(mode, path, recursive=False):
     ''' Change permissions of path.
 
-        mode is a string or octal integer for the chmod command. 
+        mode is a string or octal integer for the chmod command.
         Examples::
             'o+rw,g+rw'
             0660
@@ -79,7 +79,7 @@ def chmod(mode, path, recursive=False):
     # delete this assert if no assertion errors 2015-01-01
     # after we remove this assert, mode can be a string
     assert isinstance(path, str)
-    
+
     if isinstance(mode, int):
         # chmod wants an octal int, not decimal
         # so if it's an int we convert to an octal string
@@ -97,12 +97,12 @@ def chmod(mode, path, recursive=False):
 
 def chown(owner, path, recursive=False):
     ''' Change owner of path.
-    
+
         'owner' can be the user name, uid as an int, or uid as a string.
 
         Log and reraise any exception.
     '''
-    
+
     # import delayed to avoid infinite recursion
     import syr.user
 
@@ -117,7 +117,7 @@ def chown(owner, path, recursive=False):
             format(syr.user.whoami(), owner, path))
         log.error(sh_exception)
         raise
-        
+
     # verify. after we have higher confidence, move this into doctests
     if type(owner) is str and ':' in owner:
         owner, group = owner.split(':')
@@ -139,10 +139,10 @@ def chgrp(group, path, recursive=False):
     ''' Change group of path.
 
         'group' can be the group name, gid as an int, or gid as a string.
-        
+
         Log and reraise any exception.
     '''
-    
+
     # import delayed to avoid infinite recursion
     import syr.user
 
@@ -174,7 +174,7 @@ def chgrp(group, path, recursive=False):
     except ValueError:
         gid = syr.user.getgid(group)
     assert getgid(path) == gid, 'gid set to {} but is {}'.format(gid, getgid(path))
-    
+
 def getmode(path):
     ''' Return permissions (mode) of a path.
 
@@ -196,7 +196,7 @@ def getgid(path):
 
 def set_attributes(path, owner=None, group=None, perms=None, recursive=False):
     ''' Set ownership and permissions. '''
-    
+
     if owner is not None:
         chown(owner, path, recursive)
     if group is not None:
@@ -207,7 +207,7 @@ def set_attributes(path, owner=None, group=None, perms=None, recursive=False):
 def makedir(dirname, owner=None, group=None, perms=None):
     ''' Make dir with default ownership and permissions.
 
-        Makes parent dirs if needed. If dir already exists, ownership 
+        Makes parent dirs if needed. If dir already exists, ownership
         and permissions are not changed.
     '''
 
@@ -234,111 +234,204 @@ def makedir(dirname, owner=None, group=None, perms=None):
     finally:
         lock.release()
 
-    assert os.path.isdir(dirname)
+    assert os.path.isdir(dirname), 'could not make dir: {}'.format(dirname)
 
 @contextmanager
 def temp_mount(*args, **kwargs):
-    ''' Context manager to mount/umount a filesystem.
+    ''' Context manager to mount/unmount a filesystem.
 
-        See "man mount" and python package "sh".
+        Example::
+            >>> import os, tempfile
+            >>>
+            >>> mountpoint = tempfile.mkdtemp()
+            >>>
+            >>> with temp_mount('/tmp', mountpoint):
+            >>>     mounted(mountpoint)
+            True
+            >>> mounted(mountpoint)
+            False
+            >>> os.unlink(mountpoint)
 
-        disabled>>> import os, os.path, sh
-
-        disabled>>> d = str(sh.mktemp(directory=True)).strip()
-        disabled>>> d2 = str(sh.mktemp(directory=True)).strip()
-        disabled>>> t = os.path.join(d, 'test')
-        disabled>>> t2 = os.path.join(d2, 'test')
-        disabled>>> # how do we ignore the <BLANKLINE> from sh.touch()? And why do we get it?
-        disabled>>> x = sh.touch(t)
-        disabled>>> assert os.path.exists(t)
-        disabled>>> with temp_mount('--bind', d, d2):
-        disabled>>> # with temp_mount(d, d2, bind=True):
-        disabled...     assert os.path.exists(t2)
-        disabled>>> assert not os.path.exists(t2)
+        Mounts/unmounts only if was unmounted.
+        Leaves the mount point in the original state, mounted or unmounted,
+        unless the context block changes the mount state.
     '''
 
-    """ Needs more tests, especially for --bind/move/make-xxx with sh.umount(args[-1]) """
+    ''' Needs more tests, especially for --bind/move/make-xxx with sh.umount(args[-1]) '''
 
     # import delayed to avoid infinite recursion
     import syr.user
-    
-    with syr.user.sudo():
-        sh.mount(*args, **kwargs)
 
-    try:
+    # the last arg is reliably the mount point
+    # even with --bind, --move, etc.
+    mountpoint = os.path.abspath(args[-1])
+    if mounted(mountpoint):
         yield
 
-    finally:
-        # the last arg is reliably the mount point
-        # even with --bind, --move, etc.
-        mount_point = os.path.abspath(args[-1])
+    else:
         with syr.user.sudo():
-            sh.umount(mount_point)
+            # last arg is mount point
+            log.debug('temp mount {}'.format(mountpoint))
+            mount(*args, **kwargs)
+
+        try:
+            yield
+
+        finally:
+            with syr.user.sudo():
+                log.debug('ummount temp mount {}'.format(mountpoint))
+                unmount(mountpoint)
 
 def mounts():
-    """ Return filesystem mounts as list.
+    ''' Return filesystem mounts as list.
 
-        List elements are (device, dir, type, params, deleted).
+        List elements are (device, mountpoint, vfstype, options).
+        All elements are strings.
 
-        'deleted' is a boolean. All other items are strings.
-
-        disabled>>> m = mounts()
-        disabled>>> # how do we verify this?
-        disabled>>> assert 'proc' in repr(m)
-    """
+        >>> m = mounts()
+        >>> for knownmount in ['/', '/sys', '/proc', '/dev']:
+        ...     assert any(knownmount == mountpoint for (device, mountpoint, vfstype, options) in m)
+    '''
 
     # import delayed to avoid infinite recursion
     import syr.user
-    
+
     results = []
     with syr.user.sudo():
-
         with open('/etc/mtab') as mtab:
             for line in mtab:
-                device, _, rest = line.partition(' ')
-                dir, _, rest = rest.partition(' ')
-                type, _, rest = rest.partition(' ')
-                params, _, rest = rest.partition(' ')
-                fsck, _, dump = rest.partition(' ')
-                results.append((device, dir, type, params))
+                device, mountpoint, vfstype, options, dump, fsck = tuple(line.split())
+                results.append((device, mountpoint, vfstype, options))
 
     return results
 
-def umount_all(dirname):
-    """ Unmount all points in the named dir.
+def mounted_devices():
+    ''' Return list of mounted devices. '''
+
+    return [device
+        for device, mountpoint, vfstype, options in mounts()]
+
+def unmounted_block_devices():
+    ''' Return list of unmounted devices that may have filesystems, 
+        i.e. unmounted block devices. '''
+        
+    unmounted = []
+    mounted = mounted_devices()
+    for device in devices():
+        # /dev/sda may appear to not be mounted, but /dev/sda1 is
+        dev_mounted = False
+        for mounted_device in mounted:
+            if mounted_device.startswith(device):
+                dev_mounted = True
+        if not dev_mounted:
+            unmounted.append(device)
+            
+    return unmounted
+
+def mountpoints():
+    ''' Return list of filesystem mountpoints.
+
+        >>> for knownmount in ['/', '/sys', '/proc', '/dev']:
+        ...     assert knownmount in mountpoints()
+    '''
+
+    return [mountpoint
+        for device, mountpoint, vfstype, options in mounts()]
+
+def mount(*args, **kwargs):
+    ''' Convenience function for sh.mount. '''
+
+    try:
+        sh.mount(*args, **kwargs)
+    except Exception as exc:
+        log.debug(exc)
+        raise
+
+def unmount_all(dirname):
+    ''' Unmount all points in the named dir.
 
         Sometimes this doesn't work if mounts are in use.
         Use syr.process.program_from_file() to find the active processes
         using the mounts and kill them.
         Or reboot, or wait a while, etc.
-    """
+    '''
 
     log.debug('unmount all in {}'.format(dirname))
     # make sure we have a trailing slash
     dir_prefix = os.path.join(dirname, '')
     # umount last mounted first
-    for device, dir, type, params in reversed(mounts()):
-        if dir.startswith(dir_prefix):
-            log.debug('unmounting {}'.format(dir))
-            sh.umount(dir)
 
-        """
-        if mounted(dir):
-            # import delayed to avoid infinite recursion
-            import syr.process
-            log.debug('unable to unmount {}, opened by {}'.format(
-                dir,
-                syr.process.program_from_file(dir)))
-        """
+    try:
+        for device, mountpoint, vfstype, options in reversed(mounts()):
+            if mountpoint.startswith(dir_prefix):
+                unmount(mountpoint)
+    except FileSystemException:
+        # still try umount at the top level dir
+        pass
+
+    unmount(dirname)
+
+def unmount(mountpoint):
+    ''' Unmount mountpoint. '''
+
+    if mounted(mountpoint):
+        log.debug('unmount {}'.format(mountpoint))
+
+        try:
+            sh.umount(mountpoint)
+
+        finally:
+            log.debug('error in unmount: {}'.format(mountpoint))
+            # if not mounted, try to find out why
+            if mounted(mountpoint):
+
+                # import delayed to avoid import recursion
+                import syr.process
+
+                # find what has the path open
+                msg = 'unmount failed: {}'.format(mountpoint)
+                programs = syr.process.programs_using_file(mountpoint)
+                if programs:
+                    msg += ', in use by {}'.format(programs)
+                log.debug(msg)
+
+                # try waiting a couple of seconds
+                import time # DEBUG
+                time.sleep(2) # DEBUG
+                if mounted(mountpoint): # DEBUG
+                    log.debug('still mounted after delay: {}'.format(mountpoint)) # DEBUG
+                else: # DEBUG
+                    log.debug('NOT mounted after delay: {}'.format(mountpoint)) # DEBUG
+
+                raise FileSystemException(msg)
+
+            else:
+                log.debug('umount had error but path is not mounted: {}'.format(mountpoint))
 
 def mounted(path):
     ''' Return True iff path mounted. '''
 
-    mounted = False
-    for device, dir, type, params in mounts():
-        if dir == path:
-            mounted = True
-    return mounted
+    return path.rstrip('/') in mountpoints()
+
+def mounted_on(path):
+    ''' Return device mounted on path, or None if none. '''
+
+    mounted_device = None
+    for device, mountpoint, vfstype, options in mounts():
+        # return first matching device
+        if mounted_device is not None:
+            if path == mountpoint:
+                mounted_device = device
+                
+    return mounted_device
+        
+def devices():
+    ''' Return list of devices that may have filesystems. '''
+    
+    # block devices may have filesystems
+    raw_output = sh.lsblk('--noheadings', '--list', '--paths', '--output=NAME').stdout
+    devices = raw_output.strip().split('\n')
+    return devices
 
 def match_parent_owner(path, mode=None):
     ''' Chown to the parent dir's uid and gid.
@@ -347,7 +440,7 @@ def match_parent_owner(path, mode=None):
 
     # import delayed to avoid infinite recursion
     import syr.user
-    
+
     try:
         statinfo = os.stat(os.path.dirname(path))
         os.chown(path, statinfo.st_uid, statinfo.st_gid)
@@ -360,11 +453,11 @@ def match_parent_owner(path, mode=None):
     finally:
         if mode is not None:
             chmod(mode, path)
-            
+
 def get_unique_filename(dirname, prefix, suffix):
     '''
         Get a unique filename.
-        
+
         >>> dirname = '/tmp'
         >>> prefix = 'test'
         >>> suffix = 'txt'
@@ -412,9 +505,9 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
 
         Otherwise, like cp, source will overwrite any existing dest.
 
-        Unlike shutil.copytree() which this function eventually calls,
-        the default is symlinks=True. So symlinks are copied as symlinks.
-        If you want the links replaced by the content, set symlinks=False.
+        Unlike shutil.copytree() the default is symlinks=True. So symlinks
+        are copied as symlinks. If you want the links replaced by the
+        content, set symlinks=False.
 
         Set ownership and permissions from keywords, or if None copy from
         the corresponding source file.
@@ -463,7 +556,7 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
     if symlinks and os.path.islink(source):
         dest = os.path.join(dest, os.path.basename(source))
         if os.path.exists(dest):
-            log.debug('copy() dest exists, removed: {}'.format(dest))
+            # log.debug('copy() source is link but dest exists, remove dest: {}'.format(dest))
             os.remove(dest)
         os.symlink(os.readlink(source), dest)
 
@@ -476,19 +569,23 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
             if os.path.basename(dest) != os.path.basename(os.path.dirname(dest)):
                 if os.path.basename(source) != os.path.basename(dest):
                     dest = os.path.join(dest, os.path.basename(source))
+                    log.debug('copy() set path to include source basename: {}'.format(dest))
 
         if os.path.exists(dest):
+            log.debug('copy() remove dest: {}'.format(dest))
             sh.rm(dest, force=True, recursive=True)
 
         if os.path.isdir(source):
 
-            umount_all(source)
+            unmount_all(source)
 
             if (symlinks is True and ignore is None):
+                # log.debug('copy() sh.cp({}, {}, archive=true)'.format(source, dest))
                 sh.cp(source, dest, archive=True)
                 set_attributes(dest, owner, group, perms, recursive=True)
 
             else:
+                # log.debug('copy(..., symlinks={}, ignore={})'.format(symlinks, ignore))
                 makedir(dest)
                 # copystat does *not* affect owner and group
                 shutil.copystat(source, dest)
@@ -499,38 +596,43 @@ def copy(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms
                     ignored = []
                 else:
                     ignored = ignore(source, files)
+                    # log.debug('copy() ignored set to {}'.format(ignored))
 
                 for file in files:
 
                     source_path = os.path.join(source, file)
                     if source_path not in ignored:
+                        # log.debug('copy() recursing')
                         copy(source_path, dest,
                              symlinks=symlinks, ignore=ignore, owner=owner, group=group, perms=perms)
 
         else:
             sh.cp(source, dest, preserve='all')
-            # delete these 2 lines if unused by 2015-09-01
-            #shutil.copy(source, dest)
-            #shutil.copystat(source, dest)
-            
             set_attributes(dest, owner, group, perms, recursive=True)
-            
-    # log.debug('after copy: dest={}, owner=={}, group=={}, perms=={})'.
-    #     format(dest, os.stat(dest).st_uid, os.stat(dest).st_gid, oct(getmode(dest))))
-            
-def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perms=None):
+
+    log.debug('after copy: dest={}, owner=={}, group=={}, perms=={})'. # DEBUG
+        format(dest, getuid(dest), getgid(dest), oct(getmode(dest)))) # DEBUG
+
+def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, group=None, perms=None):
     ''' Merge source to dest dir.
 
         Like shutil.copytree(), but merges with existing dest dir.
-        Unlike shutil.copytree(), symlinks=Truee. This symlinks behavior is
-        compatible with syr.fs.copy(), and seems to almost always be what we want.
+        Unlike shutil.copytree(), symlinks and force default to True. 
+        This behavior is compatible with syr.fs.copy(), and seems to 
+        almost always be what we want.
 
         Set ownership and permissions from keywords, or if None copy from
         the corresponding source file.
     '''
 
-    """ Largely copied frpm http://code.activestate.com/lists/python-list/191783/
-        which in turn is largely copied from shutil.copytree(). """
+    ''' Largely copied from http://code.activestate.com/lists/python-list/191783/
+        which in turn is largely copied from shutil.copytree(). '''
+        
+    def remove_dest(destname):
+        if os.path.lexists(destname) and force:
+            log.debug('removing {}'.format(destname))
+            os.remove(destname)
+            # assert not os.path.exists(destname) # DEBUG
 
     if not os.path.exists(source):
         raise ValueError('source "{}" does not exist'.format(source))
@@ -538,8 +640,8 @@ def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perm
     if not os.path.isdir(dest):
         raise ValueError('dest "{}" must be a dir'.format(dest))
 
-    #log.debug('merge(source={}, dest={}, symlinks=={}, ignore=={}, owner=={}, group=={}, perms=={})'.
-    #    format(source, dest, symlinks, ignore, owner, group, perms))
+    # log.debug('merge(source={}, dest={}, symlinks=={}, force=={}, ignore=={}, owner=={}, group=={}, perms=={})'.
+    #     format(source, dest, symlinks, force, ignore, owner, group, perms))
 
     names = os.listdir(source)
     if ignore is not None:
@@ -558,20 +660,22 @@ def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perm
             try:
                 if symlinks and os.path.islink(sourcename):
                     linkto = os.readlink(sourcename)
-                    #log.debug('merge() symlink({}, {})'.format(linkto, destname)) #DEBUG
-                    if os.path.exists(destname):
-                        os.remove(destname)
+                    # log.debug('merge() symlink({}, {})'.format(linkto, destname)) #DEBUG
+                    remove_dest(destname)
                     os.symlink(linkto, destname)
+                    
                 elif os.path.isdir(sourcename):
                     if not os.path.isdir(destname):
                         mode = getmode(sourcename)
-                        #log.debug('merge() makedirs({}, {})'.format(destname, mode)) #DEBUG
+                        # log.debug('merge() makedirs({}, {})'.format(destname, mode)) #DEBUG
                         makedir(destname, perms=mode)
                     merge(sourcename, destname,
-                        symlinks, ignore,
-                        owner, group, perms)
+                        symlinks=symlinks, ignore=ignore, force=force,
+                        owner=owner, group=group, perms=perms)
+                        
                 else:
-                    #log.debug('merge() copy2({}, {})'.format(sourcename, destname)) #DEBUG
+                    # log.debug('merge() copy2({}, {})'.format(sourcename, destname)) #DEBUG
+                    remove_dest(destname)
                     shutil.copy2(sourcename, destname)
                     set_attributes(destname, owner=owner, group=group, recursive=True)
 
@@ -581,11 +685,13 @@ def merge(source, dest, symlinks=True, ignore=None, owner=None, group=None, perm
                 # XXX What about devices, sockets etc.?
 
             except (IOError, os.error), why:
+                log.debug('could not merge: {}'.format(name))
                 errors.append((sourcename, destname, str(why)))
 
             # catch the shutil.Error from the recursive merge so that we can
             # continue with other files
             except shutil.Error, err:
+                log.debug('could not merge: {}'.format(name))
                 errors.extend((sourcename, destname, err.args[0]))
 
     if errors:
@@ -706,7 +812,7 @@ def clonedirs(sourceroot, destroot, destdir, owner=None, group=None, perms=None)
         log.debug('   owner={}, group={}, perms={}'.format(owner, group, perms))
 
     # a chroot might have active mounts
-    umount_all(sourcepath)
+    unmount_all(sourcepath)
 
     if os.path.exists(destpath):
         # if it's a dir, we're done
@@ -718,21 +824,21 @@ def clonedirs(sourceroot, destroot, destdir, owner=None, group=None, perms=None)
         parent = os.path.dirname(destdir)
         clonedirs(sourceroot, destroot, parent, owner, group, perms)
 
-        perms = perms or getmode(sourcepath)
-        makedir(destpath)
-        set_attributes(destpath, owner, group, perms, recursive=True)
+        if perms is None:
+            perms = getmode(sourcepath)
+        makedir(destpath, owner, group, perms)
 
 def remove(path):
     ''' Remove the path.
 
-        If path is a dir, empty it first by rsyncing an empty dir to the 
-        path. With a large directory this is much faster than rm or 
+        If path is a dir, empty it first by rsyncing an empty dir to the
+        path. With a large directory this is much faster than rm or
         shutil.rmtree().
-        
+
         It is not an error if the path does not exist.
 
         If path is a link, only remove the link, not the target.
-        
+
         If path is a mount, raise ValueError.
     '''
 
@@ -752,6 +858,7 @@ def remove(path):
         else:
             assert os.path.isdir(path)
 
+            """ DELETE if still unused 2015-12-01
             # empty the dir using rsync for speed
             sh.rsync('--archive', '--delete',
                 empty_dir + '/',
@@ -759,146 +866,150 @@ def remove(path):
             if os.listdir(path):
                 log.warning('remove() dir not empty after rsync: {}\n{}'.format(
                     path, sh.ls('-al', path)))
+            """
             sh.rm('--force', '--recursive', path)
 
-        assert not os.path.exists(path), 'could not remove {}'.format(path)
+    assert not os.path.exists(path), 'could not remove {}'.format(path)
 
 def relative_path(path):
     ''' Return path as relative path, with no leading or trailing '/'. '''
-    
+
     return path.strip('/')
-    
+
 def filemode(st_mode):
     ''' Convert integer file permissions to an octal string.
-    
-        Function named after python 3.3 os.stat.filemode(). 
-    
+
+        Function named after python 3.3 os.stat.filemode().
+
         See python - How to convert a stat output to a unix permissions string - Stack Overflow
             http://stackoverflow.com/questions/17809386/how-to-convert-a-stat-output-to-a-unix-permissions-string
-            
+
         >>> import os, stat, tempfile
-        
+
         >>> fd, filename = tempfile.mkstemp()
         >>> os.close(fd)
-        
+
         >>> # rwx for user and group
         >>> os.chmod(filename, stat.S_IRWXU | stat.S_IRWXG)
-        
+
         >>> filemode(os.stat(filename).st_mode)
         '-rwxrwx---'
-        
+
         >>> os.remove(filename)
     '''
-    
+
     try:
-        if S_ISDIR(st_mode):  
-            is_dir = 'd' 
+        if S_ISDIR(st_mode):
+            is_dir = 'd'
         else:
             is_dir = '-'
     except:
         is_dir = '-'
     octal_to_readable = {
-        '7':'rwx', 
-        '6' :'rw-', 
-        '5' : 'r-x', 
-        '4':'r--', 
-        '3':'-wx', 
-        '2':'-w-', 
-        '1':'--x', 
+        '7':'rwx',
+        '6' :'rw-',
+        '5' : 'r-x',
+        '4':'r--',
+        '3':'-wx',
+        '2':'-w-',
+        '1':'--x',
         '0': '---'}
     perm = str(oct(st_mode)[-3:])
     return is_dir + ''.join(octal_to_readable.get(x,x) for x in perm)
-    
+
 @contextmanager
 def restore_file(filename):
-    ''' Context manager restores a file to its previous state. 
-    
+    ''' Context manager restores a file to its previous state.
+
         If the file exists on entry, it is backed up and restored.
-        
-        If the file does not exist on entry and does exists on exit, 
-        it is deleted. 
+
+        If the file does not exist on entry and does exists on exit,
+        it is deleted.
     '''
-        
+
     exists = os.path.exists(filename)
-    
+
     if exists:
         # we just want the pathname, not the handle
-        # tiny chance of race if someone gets the temp filename
+        # tiny chance of race if someone else gets the temp filename
         handle, backup = tempfile.mkstemp()
         os.close(handle)
-        log('restore_file() backing up "{}" to "{}"'.format(filename, backup))
         sh.cp('--archive', filename, backup)
-    else:
-        log('restore_file() not backing up "{}" because does not exist'.format(filename))
-        
+
     try:
         yield
-        
+
     finally:
         if os.path.exists(filename):
             sh.rm(filename)
         if exists:
-            log('restore_file() restoring "{}" from "{}"'.format(filename, backup))
             # restore to original state
             sh.mv(backup, filename)
-        else:
-            log('restore_file() not restoring "{}" because did not exist'.format(filename))
-            
+
 def edit_file_in_place(filename, replacements, regexp=False, lines=False):
-    """ Replace text in file. 
-    
+    ''' Replace text in file.
+
         'replacements' is a dict of {old: new, ...}.
-        Every occurence of each old string is replaced with the 
+        Every occurence of each old string is replaced with the
         matching new string.
-        
+
         If regexp=True, the old string is a regular expression.
         If lines=True, each line is matched separately.
-        
+
         Perserves permissions.
-        
+
         >>> # note double backslashes because this is a string within a docstring
         >>> text = (
         ...     'browser.search.defaultenginename=Startpage HTTPS\\n' +
         ...     'browser.search.selectedEngine=Startpage HTTPS\\n' +
         ...     'browser.startup.homepage=https://tails.boum.org/news/\\n' +
         ...     'spellchecker.dictionary=en_US')
-        
+
         >>> f = tempfile.NamedTemporaryFile(mode='w', delete=False)
         >>> f.write(text)
         >>> f.close()
-        
+
         >>> HOMEPAGE = 'http://127.0.0.1/'
         >>> replacements = {
         ...     'browser.startup.homepage=.*':
         ...         'browser.startup.homepage={}'.format(HOMEPAGE),
         ...     }
-        
+
         >>> edit_file_in_place(f.name, replacements, regexp=True, lines=True)
-        
+
         >>> with open(f.name) as textfile:
         ...     newtext = textfile.read()
         >>> assert HOMEPAGE in newtext
-        
+
         >>> os.remove(f.name)
-    """
-    
+    '''
+
     # import delayed to avoid infinite recursion
     import syr.utils
-    
+
+    log.debug('edit file in place: {}, replacements {}'.format(filename, replacements))
+
+    # sometimes replace_strings() gets a type error
+    for old, new in replacements.items():
+        assert isinstance(old, str), 'replacement old "{}" should be string but is type {}'.format(old, type(old))
+        assert isinstance(new, str), 'replacement new "{}" should be string but is type {}'.format(new, type(new))
+
     # read text
     mode = os.stat(filename).st_mode
     with open(filename) as textfile:
         text = textfile.read()
-    
+
     if lines:
         newtext = []
         for line in text.split('\n'):
+            # sometimes replace_strings() gets a type error
+            assert isinstance(line, str), 'line should be string but is {}'.format(type(line))
             newline = syr.utils.replace_strings(line, replacements, regexp)
             newtext.append(newline)
         text = '\n'.join(newtext)
     else:
         text = syr.utils.replace_strings(text, replacements, regexp)
-    
+
     # write text
     with open(filename, 'w') as textfile:
         textfile.write(text)
@@ -907,68 +1018,80 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
 
 def why_file_permission_denied(pathname, mode='r'):
     ''' Return string saying why file access didn't work.
-    
-        If permission is allowed, returns None.
-        
-        If present, the mode parameter is one or more of the characters 
-        'r', 'w', 'x', '+' for 'read', 'write', 'execute', and 'append'.  
-        
-        '+' is treated as 'w'. '''
-    
+
+        Checks parent directories.
+
+        If access mode is allowed, returns None.
+
+        mode::
+            r   read
+            w   write
+            x   execute
+            s   search
+            +   append
+
+        The default mode is 'r'. 's' is treated as 'x'. '+' is treated as 'w'.
+    '''
+
     # import delayed to avoid infinite recursion
     import syr.user
-    
+
     if type(mode) == int:
         mode = filemode(mode)
-                
+
     reason = None
     while pathname and reason is None:
-    
-        #print('{} mode: {}'.format(pathname, filemode(stat_info.st_mode))) #DEBUG
-        
+
         for perm in mode:
-            
-            if os.path.isdir(pathname):
-                try:
-                    # 'x' is search, but is this right for 'r'?
-                    if perm == 'r' or perm == 'x':
-                        os.listdir(pathname)
-                    else:
-                        # test for write
-                        f = TemporaryFile(dir=pathname)
-                        f.close()
-                except:
-                    reason = 'no "{}" access for {}'.format(perm, pathname)
-                    
-            else:
-                try:
-                    f = open(pathname, mode)
-                    f.close()
-                except:
-                    reason = 'no "{}" access for {}'.format(perm, pathname)
-                
+
+            if ((perm == 'r' and not is_readable(pathname)) or
+                ((perm == 'w' or perm == '+') and not is_writeable(pathname)) or
+                ((perm == 'x' or perm == 's') and not is_executable(pathname))):
+
+                reason = 'no "{}" access for {}'.format(perm, pathname)
+
         if pathname:
             # remove last component of pathname
             parts = pathname.split('/')
             pathname = '/'.join(parts[:-1])
-    
+
     if reason:
         reason += ' as user {}'.format(syr.user.whoami())
-        
+
     return reason
-    
+
 def replace_file(filename, content):
-    """ Replace file content.
-    
+    ''' Replace or create file content.
+
         Perserves permissions.
-    """
-    
-    mode = os.stat(filename).st_mode
+    '''
+
+    if os.path.exists(filename):
+        mode = os.stat(filename).st_mode
+    else:
+        mode = None
     with open(filename, 'w') as f:
         f.write(content)
-    os.chmod(filename, mode)
-    assert mode == os.stat(filename).st_mode
-    
+    if mode is not None:
+        os.chmod(filename, mode)
+        assert mode == os.stat(filename).st_mode
+
+def is_readable(path):
+    ''' Return whether the path is readable by the current user '''
+
+    return os.access(path, os.R_OK)
+
+def is_writeable(path):
+    ''' Return whether the path is writeable by the current user '''
+
+    return os.access(path, os.W_OK)
+
+def is_executable(path):
+    ''' Return whether the path is executable, or if a dir searchable,
+        by the current user '''
+
+    return os.access(path, os.X_OK)
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

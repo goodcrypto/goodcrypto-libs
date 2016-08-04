@@ -1,0 +1,61 @@
+{% extends "admin/singleton_enabled_base.html" %}
+{# extends "admin/base.html" #}
+{% comment %}
+    Admin base template.
+    
+    Wrapper for "admin/base.html". 
+    All other custom admin templates should extend this template, not "admin/base.html".
+    
+    Django admin does not have a "block extrascript", so this template includes one 
+    inside of "block extrahead". 
+
+    Copyright (c) 2010-2015 GoodCrypto
+    Last modified: 2015-05-14
+{% endcomment %}
+{% load i18n custom %}
+
+{% block title %}    
+    {% block titlevar %} 
+        {{ title }} | {% get_title title %}
+    {% endblock %}
+{% endblock title %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% include 'reinhardt/snippets/css_basic.html' %}
+    {% block extrascript %}
+        {% include 'reinhardt/snippets/js_basic.html' %}
+        <script type="text/javascript" src="{% static 'js/admin_js.js' %}"></script>
+    {% endblock extrascript %}
+{% endblock extrahead %}
+
+    <!-- Header -->
+    {% block nav-global %}
+    <nav class="navbar navbar-default navbar-fixed-top">
+        <div class="collapse navbar-collapse" id="navbar-collapse-1">
+        {% block navpane %}
+            {% if is_popup %}
+                {{ block.super }}
+            {% else %}                        
+                {% block navlinks %}
+                    <div class="navbar-header">
+                      <ul class="nav navbar-nav">
+                    {% include 'snippets/navbar.html' %}
+                    {% block usertools %}
+                        {% include 'reinhardt/snippets/user_tools.html' %}
+                    {% endblock usertools %}
+                    </ul>
+                    </div>
+                {% endblock navlinks %}
+            {% endif %}
+        {% endblock navpane %}
+        </div>
+    </nav>
+    <div class="row">&nbsp;</div>
+    {% endblock nav-global %}
+    <!-- end Header -->
+
+{% block userlinks %}
+    <div class="row">&nbsp;</div>
+{% endblock userlinks %}
+

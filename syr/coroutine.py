@@ -1,16 +1,16 @@
 '''
     Coroutine classes and utilties.
-    
+
     Simple replacements for overly complex threading, generators, Queues, etc.
-    
+
     See the doctests for examples.
-    
-    These functions and classes, especially Pump and Coroutine, hide 
-    the obscure python linkages between iterables and generators. In 
-    most cases you don't need threading at all. They also add optional 
-    common functionality such as filters and one time processing. Very 
+
+    These functions and classes, especially Pump and Coroutine, hide
+    the obscure python linkages between iterables and generators. In
+    most cases you don't need threading at all. They also add optional
+    common functionality such as filters and one time processing. Very
     memory efficient implementation.
-    
+
     Some functions are from:
       * Dave Beasley's Generator Tricks for System Programers
         http://www.dabeaz.com/generators-uk/
@@ -18,7 +18,7 @@
         http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
 
     Portions Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-04-12
+    Last modified: 2015-09-24
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -26,18 +26,18 @@
 from itertools import imap
 from Queue import Queue
 
-from syr.python import object_name
-from syr.utils import last_exception, last_exception_only, synchronized
+from syr.python import last_exception, last_exception_only, object_name
+from syr.utils import synchronized
 from syr.iter import iter
 from syr.log import get_log
-        
+
 # log in non-standard dir because of concurrency issues
 log = get_log('/tmp/coroutine.log')
 debug = True
 
-def consumer(func):    
+def consumer(func):
     ''' Co-routine consumer decorator.
-    
+
         Thanks to Dave Beasley. '''
 
     def start(*args,**kwargs):
@@ -45,16 +45,16 @@ def consumer(func):
         c.next()
         return c
     return start
-    
+
 def pipe(source, *pumps):
     ''' Pipe data from generators a() to b() to c() to d() ...
 
         pipe(a,b,c,d, ...) -> yield from ...d(c(b(a())))
-        
-        The source is an iterator. A pump is any callable that takes a 
-        single generator parameter and returns a generator, such as a 
-        function or coroutine.Pump instance. 
-        
+
+        The source is an iterator. A pump is any callable that takes a
+        single generator parameter and returns a generator, such as a
+        function or coroutine.Pump instance.
+
         In practice as of 2012-02-12 we've never used this, but had a need for a simpler:
             pipeline = source()
             for pump in pumps:
@@ -70,12 +70,12 @@ def pipe(source, *pumps):
         >>> def sqr(x):
         ...     for val in x:
         ...         yield val*val
-        
+
         # !!!!! python 3
         >>> def half(x):
         ...     for val in x:
         ...         yield val/2.0
-                
+
         >>> p = pipe(count(), sqr, half)
         >>> [p.next() for i in range(5)]
         [0.0, 0.5, 2.0, 4.5, 8.0]
@@ -87,47 +87,47 @@ def pipe(source, *pumps):
 
     for x in gen:
         yield x
-       
+
 def pull(iterator):
-    ''' Used e.g. on a pipe(), a Pump, or the last Pump at the end of a pipe to pull items 
-        through the pipeline. 
-        
+    ''' Used e.g. on a pipe(), a Pump, or the last Pump at the end of a pipe to pull items
+        through the pipeline.
+
         Simply traverses iterator. '''
-        
+
     for item in iterator:
         pass
 
 class Pump(object):
-    ''' A Pump is a data processsing station on a python pipeline. 
-        A pump can include filters, modify data items, and do one 
+    ''' A Pump is a data processsing station on a python pipeline.
+        A pump can include filters, modify data items, and do one
         time processing both before and after pumping.
-    
-        This class abstracts encapsulating an iterator, yield, filters, 
+
+        This class abstracts encapsulating an iterator, yield, filters,
         and one time processing before and after.
-    
-        This is a superclass for classes that process data from one pipe 
-        which is an iterable, and output that data as another iterable. 
+
+        This is a superclass for classes that process data from one pipe
+        which is an iterable, and output that data as another iterable.
         The data may be filtered or otherwise processed by overiding methods.
-   
-        Pump is implemented as a generator for memory efficiency. 
-    
-        Standard map() and reduce() are not suitable for pipes because 
-        reduce() consumes the iterable, and the pipe stops. 
+
+        Pump is implemented as a generator for memory efficiency.
+
+        Standard map() and reduce() are not suitable for pipes because
+        reduce() consumes the iterable, and the pipe stops.
         You can think of this as map-reduce without consuming the iterable.
         See coroutine.Count for an example. A Pump can also filter both
-        input and output data, and perform one time processing before and 
+        input and output data, and perform one time processing before and
         after pumping.
 
         Subclass this class and supply your own methods to change default
         behavior.
 
-        The rough equivalent of map-reduce is the method process(object). 
-        process() must return an object.  The default process(self, object) 
+        The rough equivalent of map-reduce is the method process(object).
+        process() must return an object.  The default process(self, object)
         just returns the same object unchanged.
 
         Use before_filter() to filter objects before process().
         Use after_filter() to filter afterwards.
-        If you only want your Pump to process certain objects, 
+        If you only want your Pump to process certain objects,
         but pass all objects downstream, use an "if" in process().
         The ...filter() methods filter objects going downstream.
 
@@ -135,16 +135,16 @@ class Pump(object):
         One time setup goes in before(). The default before() does nothing.
         Any final processing goes in after(), which also does nothing by default.
 
-        It's generally a good idea to only subclass Pump directly. If you 
-        subclass another subclass of Pump, you have to keep track of when to 
-        call super(). Instead try to pass one Pump as the iterator of the other 
+        It's generally a good idea to only subclass Pump directly. If you
+        subclass another subclass of Pump, you have to keep track of when to
+        call super(). Instead try to pass one Pump as the iterator of the other
         Pump, or use multiple inheritance.
 
         >>> class Printer(Pump):
         ...     def process(self, object):
         ...         print object
         ...         return object
-        
+
         >>> class Adder(Pump):
         ...
         ...     def before(self, *args, **kwargs):
@@ -156,7 +156,7 @@ class Pump(object):
         ...
         ...     def after(self):
         ...         print 'total: {}'.format(self.total)
-        
+
         >>> class Counter(Pump):
         ...
         ...     def before(self, *args, **kwargs):
@@ -168,9 +168,9 @@ class Pump(object):
         ...
         ...     def after(self):
         ...         print 'count:{}'.format(self.count)
-            
+
         >>> a=[1, 2, 3]
-        
+
         Pump list --> Printer --> Adder --> Counter --> len(list())
         >>> p1 = Printer(a)
         >>> p2 = Adder(p1)
@@ -181,10 +181,10 @@ class Pump(object):
         3
         total: 6
         count: 3
-        
+
         >>> assert p2.total == sum(a)
         >>> assert p3.count == count
-        
+
         >>> print '{count} items total to {total}'.format(count=p3.count, total=p2.total)
         3 items total to 6
         '''
@@ -239,7 +239,7 @@ class Pump(object):
 
     def before(self, *args, **kwargs):
         ''' Initial one time setup.
-        
+
             Do most of the things you'd ordinarily do in __init__ here.
             This function gets all the __init__() args except for the first,
             which is an iterable of items into the Pump.
@@ -273,8 +273,8 @@ class Pump(object):
 
     def process(self, object):
         ''' Perform any processing on an object.
-        
-            If you only want your Pump to process certain objects, 
+
+            If you only want your Pump to process certain objects,
             but pass all objects downstream, use an "if" here.
             The ...filter() methods filter objects going downstream.
 
@@ -289,34 +289,34 @@ class Pump(object):
 
     @staticmethod
     def build_pipeline(source, *pumps):
-        ''' Connect a series of pump functions to a source. A pump 
-            function is a generator function that takes an iterator 
+        ''' Connect a series of pump functions to a source. A pump
+            function is a generator function that takes an iterator
             argument. Examples:
-            
+
                 def double(iterator):
                     for item in iterator:
                         ... change or filter item ...
                         yield item * 2
-                        
+
                 def counter(iterator):
                     return Count(iterator)
-            
+
                 lambda iterator: Count(iterator)
-            
+
             E.g. to feed from source through the generator functions pump1 and pump2:
-            
+
                 pipeline = Pump.build_pipeline(source, pump1, pump2)
-                
+
             'pipeline' is a generator (pump2(pump1(source))).
-            
+
             '''
-            
+
         #if debug: log('build_pipeline({source!r}, {pumps!r})'.format(source=source, pumps=pumps))
         pipeline = source()
         for pump in pumps:
             pipeline = pump(pipeline)
         return pipeline
-        
+
 class Count(Pump):
     ''' Adds a count attribute to an iterable.
 
@@ -337,8 +337,8 @@ class Count(Pump):
         '''
 
     def before(self, attribute=None, *args, **kwargs):
-        ''' Initialize the counter. 
-        
+        ''' Initialize the counter.
+
             'attribute' is the count attribute, by default 'count'. '''
 
         self.attribute = attribute or 'count'
@@ -352,29 +352,29 @@ class Count(Pump):
 
 class Coroutine(object):
     ''' Generator based coroutine with piping, broadcasting, and aggregating.
-    
-        Gennerators are very memory efficient, but complex to use. This class 
+
+        Gennerators are very memory efficient, but complex to use. This class
         abstracts away the magic "while True", "(yield)", and superfluous "next()".
         Adds piping, broadcasting, and receiving from multiple sources.
         Includes an optional filter and one time processing before and after.
-        
+
         Pass objects to a Coroutine subclass using the co-routine's send().
         You can also specify another Coroutine as a data source.
         Override receive() to process received data.
-        (not working: Calls to receive() are synchronized to avoid races in 
+        (not working: Calls to receive() are synchronized to avoid races in
         python implementations that don't lock access properly.)
-        
-        If you try to send() back to a Coroutine that is currently sending 
-        to you, send() raises a ValueError. 
-        
-        When a Coroutine receives from multiple sources, the order of 
-        sources is undefined. Data from each source is processed in order 
+
+        If you try to send() back to a Coroutine that is currently sending
+        to you, send() raises a ValueError.
+
+        When a Coroutine receives from multiple sources, the order of
+        sources is undefined. Data from each source is processed in order
         for that source.
 
-        When a Coroutine sends to multiple sinks, the order of sinks 
-        is undefined. Data sent to a Coroutine sink is processed in the order 
+        When a Coroutine sends to multiple sinks, the order of sinks
+        is undefined. Data sent to a Coroutine sink is processed in the order
         received.
-        
+
         >>> class NoTrueScotsmanFilter(Coroutine):
         ...     # Filter out 'No true Scotsman...' definitions
         ...
@@ -384,7 +384,7 @@ class Coroutine(object):
         ...     def receive(self, object):
         ...         print object
         ...         return object
-        
+
         >>> coroutine = NoTrueScotsmanFilter()
         >>> coroutine.send('No true Scotsman...') # no response expected
         >>> coroutine.send('Cooperating process')
@@ -399,12 +399,12 @@ class Coroutine(object):
         >>> a = Test('a')
         >>> b = Test('b', sources=a)
         >>> c = Test('c', sources=b)
-        
+
         >>> d = Test('d', sources=[b, c], sinks=[a, b])
         Traceback (most recent call last):
         ...
         ValueError: path exists from sink to self: b -> d -> b
-        
+
         >>> e = Test('e')
         >>> d = Test('d', sources=[b, c], sinks=e)
         >>> a.send(1)
@@ -415,8 +415,8 @@ class Coroutine(object):
         c 4
         d 8
         e 16
-        
-        >>> a.send(3)      
+
+        >>> a.send(3)
         a 3
         b 6
         d 12
@@ -424,35 +424,35 @@ class Coroutine(object):
         c 12
         d 24
         e 48
-        
+
         '''
 
     def __init__(self, name=None, sources=None, sinks=None, *args, **kwargs):
         ''' A source is another coroutine which sends its output to this coroutine.
             The arg 'sources' may be a single source.
-        
+
             A sink is another coroutine which gets its input from this coroutine.
             The arg 'sinks' may be a single sink.
-        
+
             Initialize the receiver loop. Call before() before all other processsing. '''
-        
+
         self._name = name
-        
+
         self.sinks = set()
         for sink in iter(sinks):
             self.add_sink(sink)
-        
+
         for source in iter(sources):
             source.add_sink(self)
-        
-        self.before(*args, **kwargs)        
-        
+
+        self.before(*args, **kwargs)
+
         self.running = True
         self._c_loop = self._loop()
         self._c_loop.next()
 
     def _loop(self):
-        ''' Receive, filter, and process each item. 
+        ''' Receive, filter, and process each item.
             Call after() after all other processsing. '''
 
         try:
@@ -472,18 +472,18 @@ class Coroutine(object):
                 log(last_exception())
             finally:
                 raise
-            
+
     def name(self):
         return self._name or 'unknown'
-            
+
     def send(self, object):
         ''' Called to send an object to this Coroutine. '''
-        
+
         self._c_loop.send(object)
-        
+
     def before(self, *args, **kwargs):
         ''' Override this function to perform any one time setup.
-        
+
             Do what you'd ordinarily do in __init__. '''
         pass
 
@@ -501,28 +501,28 @@ class Coroutine(object):
             The default is to pass all objects. '''
 
         return True
-        
+
     @synchronized # this doesn't appear to work, so _loop() calls receive() directly
     def _receive(self, object):
         ''' Perform any processing on an object. Synchronized wraper for receive(). '''
 
         self.receive(object)
-    
+
     def receive(self, object):
         ''' Override this function to perform any processing on an object. '''
 
         return object
-    
+
     def stop(self):
         ''' Stop running. '''
-        
+
         self.running = False
 
     def add_sink(self, sink):
-        ''' Add a sink safely. 
-        
+        ''' Add a sink safely.
+
             Looped data pipes raise a ValueError. '''
-            
+
         def check(sinks):
             for sink in sinks:
                 if sink == self:
@@ -531,50 +531,50 @@ class Coroutine(object):
                 else:
                     path.append(sink.name())
                     check(sink.sinks)
-            
+
         if sink == self:
             raise ValueError, 'sink for {} is self'.format(self.name())
         else:
             path = [self.name(), sink.name()]
             check(sink.sinks)
-                
+
         self.sinks.add(sink)
-        
+
 def Coiterator(Coroutine):
-    ''' Coroutine that is an iterator. 
-    
-        The items you send() to a Coiterator are produced as 
+    ''' Coroutine that is an iterator.
+
+        The items you send() to a Coiterator are produced as
         iterator items. '''
 
     def before(self, block=False, *args, **kwargs):
         ''' One time setup. '''
-        
+
         self.q = Queue()
         self.block = block
         self.done = False
 
     def after(self):
         ''' One time cleanup. '''
-            
+
         self.done = True
 
     def receive(self, object):
-        ''' Receive an object. 
-        
-            If 'block=True' then wait for space in the queue. Otherwise 
+        ''' Receive an object.
+
+            If 'block=True' then wait for space in the queue. Otherwise
             if the queue is full raise Queue.Full. '''
- 
+
         self.q.put(object, self.block)
         return object
-    
+
     def __iter__(self):
         return self
 
     def next(self):
-        ''' Get and process the next item. 
+        ''' Get and process the next item.
             Block until an object is available.
             Raise StopIteration if the source is done. '''
-            
+
         if self.done:
             raise StopIteration
         else:

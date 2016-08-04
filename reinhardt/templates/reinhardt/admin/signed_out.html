@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+
+    Copyright 2009-2015 GoodCrypto
+    Last modified: 2015-02-22
+        
+{% endcomment %}
+{% load i18n %}
+
+{% block titlevar %} 
+    Signed Out
+{% endblock %}
+
+{% block breadcrumbs %}
+{% endblock %}
+
+{% block body-content %}
+    {% block content %}
+
+<!--h2>{% trans 'You signed out successfully.' %}</h2-->
+
+<ul>
+<p><a href="/login/">{% trans 'Sign in again' %}</a></p>
+</ul>
+
+    {% endblock content %}
+{% endblock body-content %}
+
+{% block footer %}{% endblock %}
+

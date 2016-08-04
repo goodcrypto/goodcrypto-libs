@@ -2,7 +2,7 @@
     Shared django settings for between projects.
 
     Copyright 2009-2015 GoodCrypto
-    Last modified: 2015-05-07
+    Last modified: 2015-09-03
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -69,20 +69,20 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.core.context_processors.static',
     'django.contrib.auth.context_processors.auth',
     'django.contrib.messages.context_processors.messages',
-    
+
     'reinhardt.context_processors.custom',
 )
 
 MIDDLEWARE_CLASSES = (
     'django.middleware.common.BrokenLinkEmailsMiddleware',
     'django.middleware.gzip.GZipMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.locale.LocaleMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    
+
     'reinhardt.middleware.template.RequestMiddleware',
     'reinhardt.middleware.template.SettingsMiddleware',
     'reinhardt.middleware.debug.DebugMiddleware',

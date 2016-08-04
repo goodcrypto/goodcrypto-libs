@@ -2,7 +2,7 @@
     Dict utilities.
 
     Copyright 2013-2015 GoodCrypto
-    Last modified: 2015-06-02
+    Last modified: 2015-09-24
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -11,50 +11,49 @@ import collections, datetime, types
 
 from syr.format import pretty
 from syr.log import get_log
-from syr.python import object_name
-from syr.utils import is_class_instance, last_exception, prefered_encoding, stacktrace
+from syr.python import last_exception, stacktrace, is_class_instance, object_name
 
 global_debug = False
 log = get_log()
 
 class CaseInsensitiveDict(collections.Mapping):
     ''' Case insensitive dict.
-    
+
         Dict lookups ignore key case. The key matches in lower, upper, or mixed case.
-    
+
         Mostly from http://stackoverflow.com/questions/3296499/case-insensitive-dictionary-search-with-python
     '''
-        
+
     def __init__(self, d=None):
         if d is None:
             d = {}
         self._d = d
         self._s = dict((k.lower(), k) for k in d)
-        
+
     def __contains__(self, k):
         return k.lower() in self._s
-        
+
     def __len__(self):
         return len(self._s)
-        
+
     def __iter__(self):
         return iter(self._s)
-        
+
     def __getitem__(self, k):
         return self._d[self._s[k.lower()]]
-        
+
     def __setitem__(self, k, v):
         self._d[k] = v
         self._s[k.lower()] = k
-        
+
     def __delitem__(self, k):
         del self._d[self._s[k.lower()]]
         del self._s[k.lower()]
-        
+
     def pop(self, k):
         k0 = self._s.pop(k.lower())
         return self._d.pop(k0)
-        
+
     def actual_key_case(self, k):
         return self._s.get(k.lower())
 
@@ -64,7 +63,7 @@ datetime_types = (datetime.timedelta, datetime.date, datetime.datetime, datetime
 
 def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, debug=False):
     ''' Resolves an object to a dictionary.
-    
+
         If deep is True, recurses as needed. Default is False.
 
         Allowable object types are:
@@ -77,9 +76,9 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
             GeneratorType,
             datetime.timedelta, datetime.date, datetime.datetime, datetime.time,
             class instances
-            
+
         As of Python 2.6 2013-05-02 types.Instancetype is not reliable. We use
-        syr.utils.is_class_instance().
+        syr.python.is_class_instance().
 
         A class instance is converted to a dict, with only data members and
         functions without parameters. Functions that require parameters (beyond self)
@@ -87,19 +86,19 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         notation so you may not have to change your code, see
         syr.dict.DictObject(). Builtin instance member names beginning
         with '__' are ignored.
-        
+
         dictify tries to use the current return value from methods.
         The method is called with no args (except self, i.e. the instance).
         We try a static method with no arguments. If these fail,
         the method is ignored.
-        
+
         dictify converts a generator to a list. Warning: This may result in
         large, or even infinite, lists.
 
         With the default param circular_refs_error=False, circular references are
         replaced by None. If circular_refs_error=True, circular references
         raise a ValueError.
-        
+
         json_compatible makes dictionary keys compatible with json, i.e. one of
         (str, unicode, int, long, float, bool, None).
 
@@ -150,7 +149,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         'tzinfo': None,
         },
         }
-        
+
         >>> import datetime
         >>> d = datetime.date(2000, 12, 1)
         >>> print pretty(dictify(d))
@@ -159,13 +158,13 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         'month': 12,
         'year': 2000,
         }
-        
+
         >>> d = {datetime.date(2001, 12, 1): 1}
         >>> print pretty(dictify(d))
         {
         {'month': 12, 'day': 1, 'year': 2001}: 1,
         }
-        
+
         >>> d = {1: datetime.date(2002, 12, 1)}
         >>> print pretty(dictify(d))
         {
@@ -175,13 +174,13 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         'year': 2002,
         },
         }
-        
+
         >>> class OldStyleClass:
         ...     class_data = 27
         ...
         ...     def __init__(self):
         ...         self.instance_data = 'idata'
-        
+
         ...     def instance_function(self):
         ...         return 3
         >>> old_c = OldStyleClass()
@@ -190,13 +189,13 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         'class_data': 27,
         'instance_data': 'idata',
         }
-        
+
         >>> class NewStyleClass(object):
         ...     class_data = 27
         ...
         ...     def __init__(self):
         ...         self.instance_data = 'idata'
-        
+
         ...     def instance_function(self):
         ...         return 3
         >>> new_c = NewStyleClass()
@@ -205,34 +204,34 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         'class_data': 27,
         'instance_data': 'idata',
         }
-        
+
     '''
-    
+
     allowed_types = (
-            types.NoneType, 
+            types.NoneType,
             types.BooleanType,
             types.IntType, types.LongType, types.FloatType, types.ComplexType,
             # ?? StringTypes is itself a tuple; can we nest it like this?
             types.StringTypes,
-            types.TupleType, types.ListType, types.DictType, 
+            types.TupleType, types.ListType, types.DictType,
             types.InstanceType, types.MethodType, types.FunctionType,
             types.ModuleType,
-            types.GeneratorType, 
+            types.GeneratorType,
             ) + datetime_types
-    
+
     def type_allowed(obj):
         return (isinstance(obj, allowed_types) or
             is_class_instance(obj))
-        
+
     def check_circular_reference(obj):
         ''' Check for circular references to instances. '''
-        
+
         global global_debug
-        
+
         if (is_class_instance(obj)
             # do not check classes that we resolve specially
             and not isinstance(obj, datetime_types)):
-        
+
             if id(obj) in _dictify_references:
                 if global_debug: log('circular reference to %s, type %s' % (obj, type(obj)))
                 if circular_refs_error:
@@ -244,23 +243,23 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                 _dictify_references.add(id(obj))
 
         return obj
-        
+
     def resolve_string(obj):
-        ''' Return object if unicode, else return str(). 
-        
+        ''' Return object if unicode, else return str().
+
             Starting with python 2.6 all strings are unicode.
             But for readability we use a plain string where possible. '''
-        
+
         try:
             value = str(obj)
         except:
             value = unicode(obj)
-            
+
         return value
-        
+
     def resolve_datetime(obj):
         global global_debug
-        
+
         if isinstance(obj, datetime.timedelta):
             value = DictObject({
                 'days': obj.days,
@@ -294,36 +293,36 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                 })
         else:
             value = None
-            
+
         if global_debug: log('datetime obj: %r, type: %s, value: %r' % (obj, type(obj), value))
         return value
 
     def resolve_dict(obj, json_compatible=False):
         ''' Resolve a dict object. This is a deep resolve to a DictObject. '''
-        
+
         global global_debug
-        
+
         d = DictObject({})
         for key in obj:
-            
+
             # a dictionary needs a hashable key
             try:
                 new_key = resolve_obj(key)
                 hash(new_key)
             except:
                 new_key = '%s-%s' % (type(key), id(key))
-                
+
             if json_compatible:
                # convert key to a json compatible type
                if not isinstance(new_key, (str, unicode, int, long, float, bool, None)):
                    new_key = repr(new_key)
-                
+
             new_value = resolve_obj(obj[key])
-            
+
             try:
                 d[new_key] = new_value
             except TypeError: # e.g. unhashable type
-                if global_debug: 
+                if global_debug:
                     log('resolving DictObject, got TypeError')
                     log('    key is %s, type %s' % (key, type(key)))
                     log('    new_key is %s, type %s' % (new_key, type(new_key)))
@@ -331,16 +330,16 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                     log('    new_value is %s, type %s' % (new_value, type(new_value)))
                     log(last_exception())
                 d[key] = new_value
-                
+
         return d
 
     def resolve_instance(obj):
         ''' Resolve an instance of a class. '''
-        
+
         def log_needs_params(instance, name):
             if global_debug:
-                log("instance %s method %s needs params, but we don't have them" % 
-                    (instance, name)) 
+                log("instance %s method %s needs params, but we don't have them" %
+                    (instance, name))
                 log(last_exception())
 
         global global_debug #DEBUG
@@ -349,7 +348,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
 
         # call the obj an instance for clarity here
         instance = obj
-        # get names of instance attributes 
+        # get names of instance attributes
         for name in dir(instance):
             # ignore builtins, etc.
             if not name.startswith('__'):
@@ -358,21 +357,21 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                 #if name == 'previous_conversion': #DEBUG
                 #    _old_debug = global_debug #DEBUG
                 #    global_debug = True #DEBUG
-                
+
                 if global_debug: log('in resolve_obj() getting "%s" attribute "%s"' %
                     (repr(instance), name))
-                
+
                 try:
                     attr = getattr(instance, name)
                     if global_debug: log(
                         'in resolve_obj() instance: "%s", attribute: "%s", type: %s' %
                         (repr(instance), name, type(attr)))
-                    
-                    # convert name to an allowed type 
+
+                    # convert name to an allowed type
                     name = resolve_obj(name)
 
                     if type_allowed(attr):
-                        
+
                         # if this attr is a method object
                         if isinstance(attr, types.MethodType):
                             try:
@@ -381,7 +380,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                                 d[name] = resolve_obj(apply(attr, [instance]))
                             except:
                                 log_needs_params(instance, name)
-                                    
+
                         # if this attr is a static method object
                         elif isinstance(attr, types.FunctionType) and deep:
                             try:
@@ -390,57 +389,57 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                                 d[name] = resolve_obj(apply(attr, []))
                             except:
                                 log_needs_params(instance, name)
-                                
+
                         else:
                             if global_debug: log('member %s.%r is an allowed type so resolving object' % (name, attr))
                             d[name] = resolve_obj(attr)
-                            
+
                     else:
                         if global_debug: log('in resolve_obj() type not allowed (%r)' % attr)
-                        
+
                 except:
                     # these seem to be caused by using @property, making it hard to
                     # get a function attr without calling the function
-                    if global_debug: 
+                    if global_debug:
                         log('in resolve_obj() ignoring following exception')
                         log(last_exception())
                     pass
-                
+
                 # usually commented out - set debug to test special case
                 #if name == 'previous_conversion': #DEBUG
                 #    global_debug = _old_debug #DEBUG
-                    
+
         return d
-        
+
     def resolve_module(module):
         ''' Resolve a module to a dict object. '''
-        
+
         global global_debug
-        
+
         d = DictObject({})
         for k, v in module.__dict__.items():
             if not k.startswith('__'):
                 d[k] = v
-        
+
         return d
-        
+
     def resolve_obj(obj):
         ''' Resolve any type to a dict object. '''
-        
+
         global global_debug
-        
+
         #assert not debug #DEBUG
         # usually commented out - set debug locally to test special case
         # if isinstance(obj, datetime_types): #DEBUG
         #     debug = True #DEBUG
-            
+
         if global_debug: log('resolve_obj(%s) type %s' % (obj, type(obj)))
         obj = check_circular_reference(obj)
 
         if (isinstance(obj, types.StringTypes)):
             value = resolve_string(obj)
 
-        elif (isinstance(obj, types.TupleType) or 
+        elif (isinstance(obj, types.TupleType) or
             isinstance(obj, types.GeneratorType)):
 
             # immutable iterators
@@ -461,9 +460,9 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         elif isinstance(obj, datetime_types):
 
             value = resolve_datetime(obj)
-            
+
         elif is_class_instance(obj):
-        
+
             value = resolve_instance(obj)
             if global_debug: log('resolve_obj(%s) value is instance: %r' % (obj, value))
 
@@ -471,11 +470,11 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
 
             value = resolve_module(obj)
             if global_debug: log('resolve_obj(%s) value is module: %r' % (obj, value))
-            
+
         elif type_allowed(obj):
             value = obj
             if global_debug: log('resolve_obj(%s) value is allowed type: %s' % (obj, type(obj)))
-            
+
         else:
             # any other type as just the type, not restorable
             value = str(type(obj))
@@ -483,14 +482,14 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                 # mention each type just once
                 _unimplemented_types.add(value)
                 if global_debug: log('resolve_obj(%s) value is unimplemented type: %s' % (obj, value))
-            
+
         if global_debug: log('resolve_obj(%s) final type: %s, value: %r' % (obj, type(value), value))
         assert not isinstance(value, datetime_types) #DEBUG
         return value
 
     global global_debug
     global_debug = debug
-    
+
     if global_debug: log('dictify(%r)' % obj)
     value = resolve_obj(obj)
 
@@ -505,8 +504,8 @@ class DictObject(dict):
     ''' Wraps a dict in a class to add <dict>.<attribute> syntax.
         This allows you to access a dict either as usual, or the way you
         access members of an instance.
-        
-        Keys and values which are of type dict are converted to DictObject. 
+
+        Keys and values which are of type dict are converted to DictObject.
 
         To convert a class instance to a dict, see syr.dictify().
 
@@ -554,7 +553,7 @@ class DictObject(dict):
         >>> print repr(d2)
         {'a': 1, 'c': {'a': 1, 'b': 'hi'}, 'b': 'hi'}
     '''
-    
+
     def __getattr__(self, name):
         return self[name]
 
@@ -564,7 +563,7 @@ class DictObject(dict):
         if isinstance(value, types.DictType):
             value = DictObject(value)
         self[name] = value
-        
+
     def __delattr__(self, name):
         if name in self.keys():
             del self[name]
@@ -577,20 +576,20 @@ class DictObject(dict):
         except:
             result = '<<<DictObject repr error>>>'
         return result
-        
+
     def __str__(self):
         try:
             result = str(dict(self))
         except:
             result = 'DictObject str error'
         return result
-        
+
     def __dir__(self):
         return self.keys()
-     
+
     def __hash__(self):
         return id(self)
-     
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

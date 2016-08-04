@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 '''
     Browser utilities.
-    
+
     Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-05-02
+    Last modified: 2015-09-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -15,15 +15,15 @@ from traceback import format_exc
 log = get_log()
 
 def user_agent_tags(ua):
-    ''' Returns list of browser types indicated by the user agent. 
+    ''' Returns list of browser types indicated by the user agent.
 
         License: http://creativecommons.org/licenses/by/2.5/
         Credits:
             GoodCrypto: http://goodcrypto.com
             This is a port from Koes Bong: http://web.koesbong.com/2011/01/28/python-css-browser-selector/,
-            which is a port from Bastian Allgeier's PHP CSS Browser Selector: http://www.bastian-allgeier.de/css_browser_selector/, 
+            which is a port from Bastian Allgeier's PHP CSS Browser Selector: http://www.bastian-allgeier.de/css_browser_selector/,
             which is a port from Rafael Lima's original Javascript CSS Browser Selector: http://rafael.adm.br/css_browser_selector
-            
+
     >>> user_agent_tags('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.56 Safari/536.5')
     ['webkit safari chrome', 'linux']
     >>> user_agent_tags('Safari/7534.57.2 CFNetwork/520.4.3 Darwin/11.4.0 (x86_64) (MacBookPro8%2C2)')
@@ -38,19 +38,19 @@ def user_agent_tags(ua):
     ['lynx']
     >>> user_agent_tags('Wget/1.12 (linux-gnu)')
     ['wget', 'linux']
-    
+
     '''
-    
+
     ua = ua.lower()
     g = 'gecko'
     w = 'webkit'
     s = 'safari'
     browser = []
-    
+
     opera_webtv_matches = re.search(r'opera|webtv', ua)
     opera_matches = re.search(r'opera(\s|\/)(\d+)', ua)
     msie_matches = re.search(r'msie\s(\d)', ua)
-    
+
     if opera_webtv_matches is None and msie_matches is not None:
         browser.append('ie ie' + msie_matches.group(1))
     elif ua.find(r'firefox/2') != -1:
@@ -93,7 +93,7 @@ def user_agent_tags(ua):
         browser.append('curl')
     elif ua.find(r'unknown'):
         browser.append('unknown')
-    
+
     #platform
     if ua.find('j2me') != -1:
         browser.append('j2me')
@@ -123,35 +123,42 @@ def user_agent_tags(ua):
         browser.append('freebsd')
     elif ua.find('x11') != -1 or ua.find('linux') != -1:
         browser.append('linux')
-        
+
     return browser
 
 def browser_types(request):
     ''' Returns list of compatible browser types from Django request. '''
-    
+
     ua = request.META.get('HTTP_USER_AGENT', 'unknown')
-    return user_agent_tags(ua)    
-    
+    return user_agent_tags(ua)
+
 def is_primitive_browser(request):
-    ''' Returns whether browser is probably primitive. 
+    ''' Returns whether browser is probably primitive.
         A browser is primitive if it can not properly display javascript or css. '''
-    
-    b = browser_types(request)    
+
+    b = browser_types(request)
     dumb = (
         'unknown' in b or
         'wget' in b or
         'lynx' in b or
-        'curl' in b or  
+        'curl' in b or
         # presumably a modern browser written in a language will not identify as that language
         'python' in b or
-        'java' in b) 
+        'java' in b)
     # log('is_primitive_browser: {}'.format(dumb))
     return dumb
-          
+
 
 def is_known_bot(browser, other):
-    ''' Returns True if this access is from a known bot. 
-    
+    ''' Returns True if this access is from a known bot.
+
+        >>> from jean.web_log_parser import LogLine
+        >>> line = '54.186.50.83 - - [21/Oct/2015:08:26:45 +0000] "GET /server/prices/ HTTP/1.1" 200 57201 "-" "BusinessBot: Nathan@lead-caddy.com"'
+        >>> access = LogLine(line)
+        >>> is_known_bot(access.browser_name, 'BusinessBot: Nathan@lead-caddy.com')
+        True
+        >>> is_known_bot(access.browser_name, access.other)
+        True
         >>> is_known_bot('curl', 'agent: curl/7.26.0')
         True
         >>> is_known_bot('Mozilla', '(compatible; Googlebot/2.1; +http://www.google.com/bot.html) agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html')
@@ -161,14 +168,14 @@ def is_known_bot(browser, other):
         >>> is_known_bot('', '')
         False
     '''
-    
+
     try:
         browser_lc = browser.lower()
         other_lc = other.lower()
-    
+
         known_bot = (
             ('mozilla' in browser_lc and len(other) <= 0) or # fake mozilla
-            browser_lc.startswith('java') or         # language lib
+            browser_lc.startswith('java') or # language lib
             'bot' in browser_lc or           # bot
             'bot' in other_lc or
             'spider' in browser_lc or        # spider
@@ -184,6 +191,8 @@ def is_known_bot(browser, other):
             'yahoo' in browser_lc or         # Yahoo
             'slurp' in browser_lc or         # slurp
             'slurp' in other_lc or
+            'sleuth' in browser_lc or        # Xenu Link Sleuth
+            'sleuth' in other_lc or          # Xenu Link Sleuth
             'curl' in browser_lc or          # curl
             'python' in browser_lc or        # python
             'perl' in browser_lc or          # perl
@@ -203,10 +212,12 @@ def is_known_bot(browser, other):
             'scoutjet' in other_lc or        # Scoutjet
             'yandex' in browser_lc or        # Yandex
             'yandex' in other_lc or
+            'nerdybot' in browser_lc or        # NerdyBot
+            'nerdybot' in other_lc or
             'archiver' in browser_lc or      # Archiver
             'ia_archiver' in browser_lc or   # Alexa
             'qqdownload' in other_lc or      # QQ
-            'ask jeeves' in other_lc or      # Ask Jeeves 
+            'ask jeeves' in other_lc or      # Ask Jeeves
             'ltx71' in browser_lc            # Scan internet for security research purposes
             )
     except:
@@ -214,12 +225,12 @@ def is_known_bot(browser, other):
         log(format_exc())
 
     log('"{} {}" known bot: {}'.format(browser, other, known_bot))
-    
+
     return known_bot
 
 def is_known_harvester(user_agent):
     ''' Returns True if this access is from a known harvester.
-    
+
         >>> is_known_harvester('Java/1.4.1_04')
         True
         >>> is_known_harvester('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET')
@@ -227,9 +238,9 @@ def is_known_harvester(user_agent):
         >>> is_known_harvester('')
         False
     '''
-    
+
     try:
-        known_harvester = ( 
+        known_harvester = (
                  user_agent.startswith('Java/1.4') or
                  user_agent.startswith('Java/1.5') or
                  user_agent.startswith('Java/1.6.') or
@@ -300,36 +311,37 @@ def is_known_harvester(user_agent):
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30)') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; MRA 4.3 (build 01218))') or
                  user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.0.3705)') or
-                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)') 
+                 user_agent.startswith('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)')
              )
     except:
         known_harvester = False
         log(format_exc())
-        
+
     log('{} known harvester: {}'.format(user_agent, known_harvester))
 
     return known_harvester
-    
-    
+
+
 def is_known_spammer(referer):
     '''Return True if the referer is a known spammer. '''
-    
+
     return (
-        'semalt.com' in referer or 
-        'buttons-for-website.com' in referer or 
+        'semalt.com' in referer or
+        'buttons-for-website.com' in referer or
         'buttons-for-your-website.com' in referer or
         'makemoneyonline.com' in referer or
         'domainsigma' in referer or
         'best-seo-offer.com' in referer or
-        'domini.cat' in referer
+        'domini.cat' in referer or
+        'http://123.249.24' in referer
           )
 
 def get_agent_info(agent):
     '''Get the browser name, version, and other data from the agent.
-    
+
        If agent not defined, return empty strings.
     '''
-    
+
     if agent:
         User_Agent_Format = re.compile(r"(?P<browser>.*?)/(?P<version>[0-9\.]*)\s*(?P<other>\(?.*\)?)")
         m = User_Agent_Format.search(agent)
@@ -338,7 +350,8 @@ def get_agent_info(agent):
             browser_version = m.group('version')
             other = m.group('other')
         else:
-            browser_name = browser_version = other = ''
+            browser_name = browser_version = ''
+            other = agent
     else:
         browser_name = browser_version = other = ''
 

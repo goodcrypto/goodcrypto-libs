@@ -1,14 +1,15 @@
 '''
     Use openssl to generate a self-signed 4096 RSA cert.
-    
+
     Copyright 2014-2015 GoodCrypto
-    Last modified: 2015-07-02
+    Last modified: 2015-10-29
 '''
-import os, sh
-from tempfile import gettempdir
-from traceback import format_exc
+import os, re, sh
+from datetime import datetime, timedelta
 from OpenSSL import crypto
 from OpenSSL.SSL import FILETYPE_PEM
+from tempfile import gettempdir
+from traceback import format_exc
 
 from syr.cli import minimal_env, Responder
 from syr.log import get_log
@@ -19,414 +20,251 @@ log = get_log()
 PRIVATE_KEY = 'private.key'
 PUBLIC_CERT = 'public.crt'
 
-KEY_EXT = '.key'
-CERT_SUFFIX = '.pem'
-DEFAULT_CA_NAME = 'ca.mitm.com'
-DEFAULT_CA_FILE = 'ca{}'.format(CERT_SUFFIX)
-TEMP_CERT_PREFIX = '.pymp_'
+SELF_SIGNED_CERT_ERR_MSG = 'self signed certificate'
+EXPIRED_CERT_ERR_MSG = 'certificate expired on'
 
-class CertAuthority(object):
-    ''' Manage certs via openssl. '''
-
-    def __init__(self, ca_name=None, ca_file=None, cache_dir=None, ca_domain=None):
-        self.ca_name = ca_name or DEFAULT_CA_NAME
-        self.ca_file = ca_file or DEFAULT_CA_FILE
-        self.ca_domain = ca_domain or DEFAULT_CA_NAME
-        log.debug('ca cert file {}'.format(self.ca_file))
-        self.cache_dir = cache_dir or gettempdir()
-        self._get_serials()
-        if os.path.exists(self.ca_file):
-            self.cert, self.key = self._read_ca(self.ca_file)
-            self._serials.add(self.cert.get_serial_number())
-        else:
-            self._generate_ca()
-
-    def _get_serials(self):
-        ''' Get the set of web site serial numbers. '''
-        
-        self._serials = set() 
-        
-        # existing website certificates
-        # log.debug('cache dir:\n    {}'.format('\n    '.join(os.listdir(self.cache_dir))))
-        for cert_filename in filter(lambda cert_path: 
-            cert_path.startswith(TEMP_CERT_PREFIX) and cert_path.endswith(CERT_SUFFIX), 
-            os.listdir(self.cache_dir)):
-        
-            cert_path = os.path.join(self.cache_dir, cert_filename)
-            log.debug('existing web site cert path {}'.format(cert_path))
-            cert = load_certificate(FILETYPE_PEM, open(cert_path).read())
-            sc = cert.get_serial_number()
-            assert sc not in self._serials
-            self._serials.add(sc)
-            log.debug('existing web site cert path {} has serial {}'.
-                format(cert_path, cert.get_serial_number()))
-            del cert
-            
-        # ca certs are added to the set separately
-
-    def _generate_ca(self):
-        ''' Generate certificate authority's own certificate '''
-        
-        # Generate key
-        self.key = self._gen_key()
-
-        self.cert = crypto.X509()
-        self.cert.set_version(3)
-        
-        self.cert.set_serial_number(self._new_serial())
-        self._serials.add(self.cert.get_serial_number())         
-        log.debug('ca cert has serial {}'.format(self.cert.get_serial_number()))
-        
-        self.cert.get_subject().CN = self.ca_name
-        self.cert.gmtime_adj_notBefore(0)
-        self.cert.gmtime_adj_notAfter(315360000)
-        self.cert.set_issuer(self.cert.get_subject())
-        self.cert.set_pubkey(self.key)
-        self.cert.add_extensions([
-            crypto.X509Extension("basicConstraints", True, "CA:TRUE, pathlen:0"),
-            crypto.X509Extension("keyUsage", True, "keyCertSign, cRLSign"),
-            crypto.X509Extension("subjectKeyIdentifier", False, "hash", subject=self.cert),
-            ])
-        """
-        # the subjectKeyIdentifier must be set before calculating the authorityKeyIdentifier
-        self.cert.add_extensions([
-            crypto.X509Extension("authorityKeyIdentifier", False, "keyid:always", issuer=self.cert),
-            ])
-        """
-        # sha1 is crap. do we really need it for compatibility? 
-        self.cert.sign(self.key, "sha1")
-
-        self.write_ca(self.ca_file, self.cert, self.key)
-        log.debug('wrote ca cert to {}'.format(self.ca_file))
- 
-    def _gen_key(self):
-        # Generate key
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 4096)
-        
-        return key
-
-    def _read_ca(self, file):
-        ''' Read a ca cert and key from file '''
-        
-        cert = crypto.load_certificate(FILETYPE_PEM, open(file).read())
-        key = crypto.load_privatekey(FILETYPE_PEM, open(file+KEY_EXT).read())
-        
-        return cert, key
-
-    def write_ca(self, cert_file, cert, key):
-        ''' Write the certificate and key in separate files for security. '''
-
-        with open(cert_file, 'wb+') as f:
-            f.write(crypto.dump_certificate(FILETYPE_PEM, cert))
-        os.chmod(cert_file, 0644)
-        with open(cert_file+KEY_EXT, 'wb+') as f:
-            f.write(crypto.dump_privatekey(FILETYPE_PEM, key))
-        os.chmod(cert_file+KEY_EXT, 0600)
-
-    def create_signed_cert(self, cn):
-        ''' Create new web site certificate signed by our certificate authority '''
-        
-        cert_path = os.path.sep.join(
-            [self.cache_dir, 
-            '{}{}{}'.format(TEMP_CERT_PREFIX, cn, CERT_SUFFIX)])
-        if not os.path.exists(cert_path):
-            # create certificate
-            key = self._gen_key()
-
-            # Generate CSR
-            req = crypto.X509Req()
-            req.get_subject().CN = cn
-            req.set_pubkey(key)
-            req.sign(key, 'sha1')
-
-            # Sign CSR
-            cert = crypto.X509()
-            cert.set_subject(req.get_subject())
-            cert.set_serial_number(self._new_serial())         
-            log.debug('web site cert for {} has serial {}'.
-                format(cn, cert.get_serial_number()))
-            cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(31536000)
-            cert.set_issuer(self.cert.get_subject())
-            cert.set_pubkey(req.get_pubkey())
-            cert.sign(self.key, 'sha1')
-
-            # the remote website's certificate and key must be stored together in a temporary file
-            with open(cert_path, 'wb+') as f:
-                f.write(crypto.dump_certificate(FILETYPE_PEM, cert))
-                f.write(crypto.dump_privatekey(FILETYPE_PEM, key))
-            assert os.path.exists(cert_path)
-            log.debug('wrote {} web site cert to {}'.
-                format(cn, cert_path))
-
-        return cert_path
-
-    def _new_serial(self):
-        ''' Return an unused serial number '''
-        
-        # !! what is the range of a cert serial?
-        MAXSERIAL = 1000000
-        
-        s = randint(1, MAXSERIAL)
-        while s in self._serials:
-            log.debug('serial {} already exists'.format(s))
-            s = randint(1, MAXSERIAL)
-        self._serials.add(s)
-        
-        log.debug('new serial {}'.format(s))
-            
-        return s
-
-class CertificateAuthority(object):
+def verify_certificate(hostname, port, ca_certs_dir=None):
     '''
-        
+        Verify a certificate is valid comparing against openssl's published certs.
+
+        >>> ok, _, _ = verify_certificate('google.com', 443)
+        >>> ok
+        True
+
+        >>> ok, _, error_message = verify_certificate('goodcrypto.private.server', 443)
+        >>> ok
+        False
+        >>> error_message
+        'self signed certificate'
+
+        >>> ok, _, error_message = verify_certificate('www.mjvmobile.com.br', 443)
+        >>> ok
+        False
+        >>> error_message
+        'certificate has expired'
     '''
 
-    def __init__(self, ca_name=None, ca_file=None, cache_dir=None):
-        '''
-            >>> ca = CertificateAuthority()
-            >>> ca.ca_name
-            'ca.mitm.com'
-            >>> ca.ca_file
-            'ca.pem'
-            >>> ca.cache_dir == gettempdir()
-            True
-            >>> ca._serials is not None
-            True
-            >>> os.path.exists(ca.ca_file)
-            True
-            >>> ca.cert is not None
-            True
-            >>> ca.key is not None
-            True
-            >>> os.remove(ca.ca_file)
-            >>> os.remove(ca.ca_file+'.key')
-        '''
-        self.ca_name = ca_name or DEFAULT_CA_NAME
-        self.ca_file = ca_file or DEFAULT_CA_FILE
-        log.debug('ca cert file {}'.format(self.ca_file))
-        self.cache_dir = cache_dir or gettempdir()
-        self._get_serials()
-        if os.path.exists(self.ca_file):
-            self.cert, self.key = self._read_ca(self.ca_file)
-            self._serials.add(self.cert.get_serial_number())
+    def extract_cert(response):
+
+        cert = None
+
+        i = response.find('-----BEGIN CERTIFICATE-----')
+        if i > 0:
+            temp_cert = response[i:]
+            i = temp_cert.find('-----END CERTIFICATE-----')
+            if i > 0:
+                cert = temp_cert[:i+len('-----END CERTIFICATE-----')]
+
+        return cert
+
+    def verify_date(cert):
+
+        ok = True
+        error_message = None
+
+        not_before, not_after = get_dates(cert)
+        try:
+            after_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+        except:
+            try:
+                after_date = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %z')
+            except:
+                after_date = datetime.now() + timedelta(days=1)
+        if after_date < datetime.now():
+            ok = False
+            error_message = '{} {}'.format(EXPIRED_CERT_ERR_MSG, not_after)
+
+        return ok, error_message
+
+    ok = True
+    error_message = ''
+    cert = None
+
+    server = '{}:{}'.format(hostname, port)
+    log('verify cert for {}'.format(server))
+
+    if ca_certs_dir is None:
+        ca_certs_dir = get_ca_certs_dir()
+
+    try:
+        # s_client wait for stdin after connecting, so we provode a short stdin
+        # _in=' ' instead of _in='' because apparently sh does something like
+        # checks '_in' instead of '_in is None'
+        result = sh.openssl('s_client', '-CApath', ca_certs_dir, '-connect', server, _in=' ')
+
+    except sh.ErrorReturnCode as erc:
+        ok = False
+        try:
+            stderr = erc.stderr.strip()
+            log('verify failed stderr:\n{}'.format(stderr))
+            # parse 'connect: No route to host\nconnect:errno=22'
+            # to 'connect: No route to host'
+            error_message = stderr.split('\n')[0].strip()
+        except:
+            error_message = erc # 'Unable to verify SSL certificate'
+        log(erc)
+
+    else:
+        log('verify result stderr:\n{}'.format(result.stderr))
+        lines = result.stderr.split('\n')
+        for line in lines:
+            if line.startswith('verify return:'):
+                return_code = line[len('verify return:'):]
+            elif line.startswith('verify error:'):
+                m = re.match('verify error:num=\d\d:(.*)', line)
+                if m:
+                    error_message += m.group(1)
+                else:
+                    error_message = line
+
+        # get the certificate so we can do additional verification
+        cert = extract_cert(result.stdout)
+
+        # it seems like we're never able to verify the local issuer so ignore the error
+        if return_code == '0' and error_message == 'unable to get local issuer certificate':
+            error_message = None
+
+        if error_message is not None and len(error_message) > 0:
+            ok = False
+            log('error verifying {} certificate: {}'.format(hostname, error_message))
         else:
-            self._generate_ca()
+            error_message = None
 
-    def _get_serials(self):
-        ''' Get the set of web site serial numbers.'''
-        
-        self._serials = set() 
-        
-        # existing website certificates
-        # log.debug('cache dir:\n    {}'.format('\n    '.join(os.listdir(self.cache_dir))))
-        for cert_filename in filter(lambda cert_path: 
-            cert_path.startswith(TEMP_CERT_PREFIX) and cert_path.endswith(CERT_SUFFIX), 
-            os.listdir(self.cache_dir)):
-        
-            cert_path = os.path.join(self.cache_dir, cert_filename)
-            log.debug('existing web site cert path {}'.format(cert_path))
-            cert = load_certificate(FILETYPE_PEM, open(cert_path).read())
-            sc = cert.get_serial_number()
-            assert sc not in self._serials
-            self._serials.add(sc)
-            log.debug('existing web site cert path {} has serial {}'.
-                format(cert_path, cert.get_serial_number()))
-            del cert
-            
-        # ca certs are added to the set separately
+        if return_code == '0' and error_message is None:
+            ok, error_message = verify_date(cert)
 
-    def _generate_ca(self):
-        ''' 
-            Generate certificate authority's own certificate 
-            
-            >>> ca = CertificateAuthority(
-            ...       ca_name='My Certificate Authority', ca_file='my.ca.crt')
-            >>> key = ca.key
-            >>> cert = ca.cert
-            >>> ca._generate_ca()
-            >>> os.path.exists('my.ca.crt')
-            True
-            >>> os.path.exists('my.ca.crt.key')
-            True
-            >>> key != ca.key
-            True
-            >>> cert != ca.cert
-            True
-            >>> os.remove('my.ca.crt')
-            >>> os.remove('my.ca.crt.key')
-        '''
+    log('cert ok: {}'.format(ok))
 
-        # Generate key
-        self.key = self._gen_key()
+    return ok, cert, error_message
 
-        self.cert = crypto.X509()
-        self.cert.set_version(3)
-        
-        self.cert.set_serial_number(self._new_serial())
-        self._serials.add(self.cert.get_serial_number())         
-        log.debug('ca cert has serial {}'.format(self.cert.get_serial_number()))
-        
-        self.cert.get_subject().CN = self.ca_name
-        self.cert.gmtime_adj_notBefore(0)
-        self.cert.gmtime_adj_notAfter(315360000)
-        self.cert.set_issuer(self.cert.get_subject())
-        self.cert.set_pubkey(self.key)
-        self.cert.add_extensions([
-            crypto.X509Extension("basicConstraints", True, "CA:TRUE, pathlen:0"),
-            crypto.X509Extension("keyUsage", True, "keyCertSign, cRLSign"),
-            crypto.X509Extension("subjectKeyIdentifier", False, "hash", subject=self.cert),
-            ])
-        """
-        # the subjectKeyIdentifier must be set before calculating the authorityKeyIdentifier
-        self.cert.add_extensions([
-            crypto.X509Extension("authorityKeyIdentifier", False, "keyid:always", issuer=self.cert),
-            ])
-        """
-        # sha1 is crap. do we really need it for compatibility? 
-        self.cert.sign(self.key, "sha1")
+def get_issuer(cert):
+    '''
+        Get the issuer of an SSL certificate.
 
-        self.write_ca(self.ca_file, self.cert, self.key)
-        log.debug('wrote ca cert to {}'.format(self.ca_file))
- 
-    def _gen_key(self):
-        '''
-            Generate a key.
-            
-            >>> ca = CertificateAuthority()
-            >>> key = ca._gen_key()
-            >>> key is not None
-            True
-            >>> os.remove(ca.ca_file)
-            >>> os.remove(ca.ca_file+'.key')
-        '''
-        # Generate key
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 4096)
-        
-        return key
+        >>> web_cert = '/var/local/projects/goodcrypto/server/data/web/security/web.ca.crt'
+        >>> with open(web_cert) as f:
+        ...     get_issuer(f.read())
+        '/O=GoodCrypto Private Server Certificate Authority/CN=goodcrypto.private.server.proxy'
+    '''
+    issuer = None
+    try:
+        result = sh.openssl('x509', '-noout', '-issuer', _in=cert)
+        m = re.match('issuer=(.*)', result.stdout)
+        if m:
+            issuer = m.group(1).strip()
+        else:
+            log('issuer result stdout: {}'.format(result.stdout))
+            log('issuer result stderr: {}'.format(result.stderr))
+    except:
+        log(format_exc())
 
-    def _read_ca(self, file):
-        '''
-            Read a ca cert and key from file 
-            
-            >>> ca = CertificateAuthority()
-            >>> cert, key = ca._read_ca(ca.ca_file)
-            >>> cert is not None
-            True
-            >>> key is not None
-            True
-            >>> os.remove(ca.ca_file)
-            >>> os.remove(ca.ca_file+'.key')
-        '''
-        
-        cert = crypto.load_certificate(FILETYPE_PEM, open(file).read())
-        key = crypto.load_privatekey(FILETYPE_PEM, open(file+KEY_EXT).read())
-        
-        return cert, key
+    return issuer
 
-    def write_ca(self, cert_file, cert, key):
-        ''' 
-            Write the certificate and key in separate files for security. 
+def get_issued_to(cert):
+    '''
+        Get to whom an SSL certificate was issued.
 
-            >>> ca = CertificateAuthority()
-            >>> cert, key = ca._read_ca(ca.ca_file)
-            >>> ca.write_ca(ca.ca_file, cert, key)
-            >>> os.path.exists(ca.ca_file)
-            True
-            >>> os.path.exists(ca.ca_file+'.key')
-            True
-            >>> os.remove(ca.ca_file)
-            >>> os.remove(ca.ca_file+'.key')
-        '''
+        >>> web_cert = '/var/local/projects/goodcrypto/server/data/web/security/web.ca.crt'
+        >>> with open(web_cert) as f:
+        ...     get_issued_to(f.read())
+        '/O=GoodCrypto Private Server Certificate Authority/CN=goodcrypto.private.server.proxy'
+    '''
+    issued_to = None
+    try:
+        result = sh.openssl('x509', '-noout', '-subject', _in=cert)
+        m = re.match('subject=(.*)', result.stdout)
+        if m:
+            issued_to = m.group(1).strip()
+        else:
+            log('issued_to result stdout: {}'.format(result.stdout))
+            log('issued_to result stderr: {}'.format(result.stderr))
+    except:
+        log(format_exc())
 
-        with open(cert_file, 'wb+') as f:
-            f.write(crypto.dump_certificate(FILETYPE_PEM, cert))
-        os.chmod(cert_file, 0644)
-        with open(cert_file+KEY_EXT, 'wb+') as f:
-            f.write(crypto.dump_privatekey(FILETYPE_PEM, key))
-        os.chmod(cert_file+KEY_EXT, 0600)
+    return issued_to
 
-    def __getitem__(self, cn):
-        ''' 
-            Create new web site certificate signed by our certificate authority.
+def get_dates(cert):
+    '''
+        Get to whom an SSL certificate was issued.
 
-            <<< ca = CertificateAuthority()
-            <<< with open(ca.ca_file) as f:
-            ...     cert_path = ca.__getitem__(ca.cert)
-            ...     os.path.exists(cert_path)
-            True
-            <<< os.remove(ca.ca_file)
-            <<< os.remove(ca.ca_file+'.key')
-        '''
-        
-        cert_path = os.path.sep.join(
-            [self.cache_dir, 
-            '{}{}{}'.format(TEMP_CERT_PREFIX, cn, CERT_SUFFIX)])
-        if not os.path.exists(cert_path):
-            # create certificate
-            key = self._gen_key()
+        >>> web_cert = '/var/local/projects/goodcrypto/server/data/web/security/web.ca.crt'
+        >>> with open(web_cert) as f:
+        ...     not_before, not_after = get_dates(f.read())
+        ...     not_before is not None
+        ...     not_after is not None
+        True
+        True
+    '''
+    not_before = not_after = None
+    try:
+        result = sh.openssl('x509', '-noout', '-dates', _in=cert)
+        m = re.match('notBefore=(.*?)\nnotAfter=(.*)', result.stdout)
+        if m:
+            not_before = m.group(1).strip()
+            not_after = m.group(2).strip()
+        else:
+            log('dates result stdout: {}'.format(result.stdout))
+            log('dates result stderr: {}'.format(result.stderr))
+    except:
+        log(format_exc())
 
-            # Generate CSR
-            req = crypto.X509Req()
-            req.get_subject().CN = cn
-            req.set_pubkey(key)
-            req.sign(key, 'sha1')
+    return not_before, not_after
 
-            # Sign CSR
-            cert = crypto.X509()
-            cert.set_subject(req.get_subject())
-            cert.set_serial_number(self._new_serial())         
-            log.debug('web site cert for {} has serial {}'.
-                format(cn, cert.get_serial_number()))
-            cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(31536000)
-            cert.set_issuer(self.cert.get_subject())
-            cert.set_pubkey(req.get_pubkey())
-            cert.sign(self.key, 'sha1')
+def get_hash(cert):
+    '''
+        Get the hash of an SSL certificate.
 
-            # the remote website's certificate and key must be stored together in a temporary file
-            with open(cert_path, 'wb+') as f:
-                f.write(crypto.dump_certificate(FILETYPE_PEM, cert))
-                f.write(crypto.dump_privatekey(FILETYPE_PEM, key))
-            assert os.path.exists(cert_path)
-            log.debug('wrote {} web site cert to {}'.
-                format(cn, cert_path))
+        >>> web_cert = '/var/local/projects/goodcrypto/server/data/web/security/web.ca.crt'
+        >>> with open(web_cert) as f:
+        ...     cert_hash = get_hash(f.read())
+        ...     cert_hash is not None
+        True
+    '''
+    cert_hash = None
+    try:
+        result = sh.openssl('x509', '-noout', '-hash', _in=cert)
+        cert_hash = result.stdout.strip()
+    except:
+        log(format_exc())
 
-        return cert_path
+    return cert_hash
 
-    def _new_serial(self):
-        ''' 
-            Return an unused serial number 
-            
-            >>> ca = CertificateAuthority()
-            >>> s = ca._new_serial()
-            >>> s is not None
-            True
-        '''
-        
-        # !! what is the range of a cert serial?
-        MAXSERIAL = 1000000
-        
-        s = randint(1, MAXSERIAL)
-        while s in self._serials:
-            log.debug('serial {} already exists'.format(s))
-            s = randint(1, MAXSERIAL)
-        self._serials.add(s)
-        
-        log.debug('new serial {}'.format(s))
-            
-        return s
+def get_fingerprint(cert):
+    '''
+        Get the MD5 fingerprint of an SSL certificate.
+
+        >>> web_cert = '/var/local/projects/goodcrypto/server/data/web/security/web.ca.crt'
+        >>> with open(web_cert) as f:
+        ...     fingerprint = get_fingerprint(f.read())
+        ...     fingerprint is not None
+        True
+    '''
+    fingerprint = None
+    try:
+        result = sh.openssl('x509', '-noout', '-fingerprint', _in=cert)
+        m = re.match('SHA1 Fingerprint=(.*)', result.stdout)
+        if m:
+            fingerprint = m.group(1).strip()
+        else:
+            log('fingerprint result stdout: {}'.format(result.stdout))
+            log('fingerprint result stderr: {}'.format(result.stderr))
+    except:
+        log(format_exc())
+
+    return fingerprint
 
 def generate_certificate(
   domain, dirname, private_key_name=PRIVATE_KEY, public_cert_name=PUBLIC_CERT, name=None, days=365):
     '''
         Generate a self-signed SSL certficate.
-        
-        >>> generate_certificate('test.domain.com', '/tmp')
+
+        Writes the public cert to the file dirname/public_cert_name.
+        Creates a dir dirname/private. Writes the private key to
+        dirname/private/private_key_name.
+
+        <<< generate_certificate('test.domain.com', '/tmp')
     '''
-    
+
     if name is None:
         name = domain
 
@@ -456,31 +294,32 @@ def gen_private_key(domain, dirname, private_key_name):
     ''' Generate an openssl private key for the domain. '''
 
     log('starting to generate private key')
-    
+
     private_key = os.path.join(dirname, 'private', private_key_name)
     temp_private_key = '{}.tmp'.format(private_key)
     kwargs = dict(_clilog=sh_out, _env=minimal_env(), _err=sh_err)
-    
+
     responses = {
         'Enter pass phrase for {}:'.format(private_key): 'secret',
         'Verifying - Enter pass phrase for {}:'.format(private_key): 'secret',
         }
 
     args = ['genrsa', '-aes256', '-out', private_key, '4096']
+    #args = ['genpkey', '-out', private_key, '-outform', 'PEM', '-aes256', '-algorithm', 'rsa', '-pkeyopt', 'rsa_keygen_bits:4096']
     Responder(responses, 'openssl', *args, **kwargs)
     assert os.path.exists(private_key), 'could not generate {}'.format(private_key)
-    
+
     sh.cp(private_key, temp_private_key)
     responses = {'Enter pass phrase for {}:'.format(temp_private_key): 'secret',}
     args = ['rsa', '-in', temp_private_key, '-out', private_key]
     Responder(responses, 'openssl', *args, **kwargs)
     os.remove(temp_private_key)
-    
+
 def gen_csr(domain, dirname, name, private_key_name):
     ''' Generate an openssl CSR for the domain. '''
 
     log('starting to generate csr')
-    
+
     private_key = os.path.join(dirname, 'private', private_key_name)
     csr = os.path.join(dirname, '{}.csr'.format(domain))
     kwargs = dict(_clilog=sh_out, _env=minimal_env(), _err=sh_err)
@@ -504,9 +343,9 @@ def gen_csr(domain, dirname, name, private_key_name):
 
 def gen_cert(domain, dirname, private_key_name, public_cert_name, days):
     ''' Generate the public certificate. '''
-    
+
     log('generating certificate')
-    
+
     private_key = os.path.join(dirname, 'private', private_key_name)
     public_cert = os.path.join(dirname, public_cert_name)
     csr = os.path.join(dirname, '{}.csr'.format(domain))
@@ -514,12 +353,12 @@ def gen_cert(domain, dirname, private_key_name, public_cert_name, days):
     sh.openssl('x509', '-req', '-days', days, '-in', csr, '-signkey', private_key, '-out', public_cert)
     assert os.path.exists(public_cert), 'could not generate {}'.format(public_cert)
     os.remove(csr)
-    
+
     # only the owner should be able to read the private key
     sh.chmod('u+r', private_key)
     sh.chmod('u-wx', private_key)
     sh.chmod('go-rwx', private_key)
-    
+
     # everyone can read the public certificate
     sh.chmod('ugo+r', public_cert)
     sh.chmod('ugo-wx', public_cert)
@@ -543,12 +382,31 @@ def delete_old_cert(domain, dirname, private_key_name, public_cert_name):
 
 def move_private_key(dirname, private_key_name):
     ''' Move the private key to the dirname. '''
-    
+
     sh.mv(os.path.join(dirname, 'private', private_key_name), os.path.join(dirname, private_key_name))
     log('moved {} to {}'.format(os.path.join(dirname, 'private', private_key_name), os.path.join(dirname, private_key_name)))
     sh.rmdir(os.path.join(dirname, 'private'))
     log('removed {}'.format(os.path.join(dirname, 'private', private_key_name)))
-    
+
+def get_ca_certs_dir():
+    '''
+        Get the directory where openssl keeps known certs.
+
+        >>> get_ca_certs_dir()
+        '/usr/lib/ssl/certs'
+    '''
+
+    ca_certs_dir = '/etc/ssl/certs'
+    try:
+        result = sh.openssl('version', '-d')
+        m = re.match('OPENSSLDIR: "(.*?)"', result.stdout)
+        if m:
+            ca_certs_dir = '{}/certs'.format(m.group(1))
+    except:
+        log(format_exc())
+
+    return ca_certs_dir
+
 def sh_out(output):
     log.debug(output.rstrip())
 
