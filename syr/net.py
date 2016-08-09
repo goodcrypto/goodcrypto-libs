@@ -1,7 +1,7 @@
 '''
     Net utilities.
 
-    Copyright 2014 GoodCrypto
+    Copyright 2014-2015 GoodCrypto
     Last modified: 2015-11-15
 
     There is some inconsistency in function naming.
@@ -9,7 +9,7 @@
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 from cookielib import CookieJar
-import re, sh, socket, urllib2
+import re, sh, socket, socks, ssl, urllib2
 from traceback import format_exc
 from urllib import urlencode
 
@@ -246,7 +246,7 @@ def send_api_request(url, params, proxy_dict=None):
 
     return body_text
 
-def post_data(full_url, params, proxy_dict=None):
+def post_data(full_url, params, proxy_dict=None, use_tor=False):
     '''
         Send a post to a url and return the data.
 
@@ -256,31 +256,92 @@ def post_data(full_url, params, proxy_dict=None):
         >>> page = post_data('https://goodcrypto.com', '', proxy_dict={'https': 'http://127.0.0.1:8398'})
         >>> page is not None
         True
+        >>> page = post_data('https://goodcrypto.com', '', proxy_dict={'https': '127.0.0.1:8398'}, use_tor=True)
+        >>> page is not None
+        True
     '''
 
+    def split_host_url(full_url):
+        # extract the host and the remainder of the url
+        m = re.match('https?://(.*/?)(.*)', full_url)
+        if m:
+            host = m.group(1)
+            try:
+                url = '/{}'.format(m.group(2))
+            except:
+                url = '/'
+        else:
+            host = full_url
+            url = '/'
+
+        if params is not None and len(params) > 0:
+            url = '{}?{}'.format(url, urlencode(params))
+        
+        return host, url
+        
+    def split_host_port(proxy_dict):
+        # extract the proxy's host and port
+        m = re.match('(\d+.\d+.\d+.\d+):(\d+)', proxy_dict['https'])
+        if m:
+            proxy_host = m.group(1)
+            proxy_port = int(m.group(2))
+        
+        return proxy_host, proxy_port
+        
     page = None
 
     try:
-        if proxy_dict is None:
-            opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
-        else:
-            proxy_handler = urllib2.ProxyHandler(proxy_dict)
-            opener = urllib2.build_opener(proxy_handler, urllib2.HTTPCookieProcessor(CookieJar()))
+        if use_tor:
+            CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
+            
 
-        request = urllib2.Request(full_url, urlencode(params))
-        handle = opener.open(request)
-        page = handle.read()
+            host, url = split_host_url(full_url)
+            proxy_host, proxy_port = split_host_port(proxy_dict)
+            
+            s = socks.socksocket()
+            s.setproxy(socks.PROXY_TYPE_SOCKS5, proxy_host, port=proxy_port)
+            log('connecting to {}'.format(host))
+            s.connect((host, 443))
+            log('connected to {}'.format(host))
+            ss = ssl.wrap_socket(s, cert_reqs=ssl.CERT_REQUIRED, ca_certs=CA_CERTS)
+            log('wrapped socket')
+            ss.write("""GET {} HTTP/1.0\r\nHost: {}\r\n\r\n""".format(url, host))
+            log('requested page')
+
+            content = []
+            while True:
+                data = ss.read()
+                log(data) #DEBUG
+                if not data: break
+                content.append(data)
+            ss.close()
+
+            page = "".join(content)
+        else:
+            if proxy_dict is None:
+                opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
+            else:
+                proxy_handler = urllib2.ProxyHandler(proxy_dict)
+                opener = urllib2.build_opener(proxy_handler, urllib2.HTTPCookieProcessor(CookieJar()))
+    
+            request = urllib2.Request(full_url, urlencode(params))
+            handle = opener.open(request)
+            page = handle.read()
 
     except urllib2.HTTPError as http_error:
         page = None
-        log(format_exc())
         log('full_url: {}'.format(full_url))
         log('http error: {}'.format(str(http_error)))
+        log(format_exc())
 
+    except socks.Socks5Error:
+        page = None
+        log('socks error while connecting to full_url: {}'.format(full_url))
+        
     except:
         page = None
-        log(format_exc())
         log('full_url: {}'.format(full_url))
+        log(format_exc())
 
     return page
 

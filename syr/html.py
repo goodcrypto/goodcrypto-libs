@@ -2,7 +2,7 @@
     HTML utilities
 
     Copyright 2013-2014 GoodCrypto
-    Last modified: 2015-09-26
+    Last modified: 2015-12-06
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -537,7 +537,29 @@ class HtmlFirewallFilter(HTMLParser.HTMLParser, object):
 
     def results(self):
         return self.plain_html
+        
+def extract_text(html):
+    ''' Extract plain text from html. 
+    
+        Requires BeautifulSoup 4.
+    '''
+    
+    # from http://stackoverflow.com/questions/1936466/beautifulsoup-grab-visible-webpage-text
+    from bs4 import BeautifulSoup
+    
+    soup = BeautifulSoup(html)
+    texts = soup.findAll(text=True)
 
+    def visible(element):
+        if element.parent.name in ['style', 'script', '[document]', 'head', 'title']:
+            return False
+        elif re.match('<!--.*-->', str(element)):
+            return False
+        return True
+
+    visible_texts = filter(visible, texts)
+    
+    return '\n'.join(visible_texts)
 
 if __name__ == "__main__":
     import doctest
