@@ -1,0 +1,41 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+
+<html>
+
+<head>
+	<meta http-equiv="content-type" content="text/html;charset=ISO-8859-1">
+	<title>Box by tedd</title>		
+	<link rel="stylesheet" href="style.css" media="screen">
+</head>
+
+<body>
+
+	<div id="box">				
+
+		<!--- box border -->
+		<div id="lb">
+		<div id="rb">
+		<div id="bb"><div id="blc"><div id="brc">
+		<div id="tb"><div id="tlc"><div id="trc">
+		<!--  -->
+				
+		<div id="content">	
+			<h1>Simple  Box by tedd</h1>
+			
+			<p>
+				View the source code via your browser.
+			</p>
+			
+				
+		</div>
+		
+		<!--- end of box border -->
+		</div></div></div></div>
+		</div></div></div></div>
+		<!-- -->
+		
+	</div>
+</body>
+
+</html>
