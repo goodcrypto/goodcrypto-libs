@@ -24,7 +24,7 @@
             http://www.virtualbox.org/manual/ch08.html
 
     Copyright 2014 GoodCrypto
-    Last modified: 2015-11-07
+    Last modified: 2016-02-21
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -460,7 +460,11 @@ class VirtualMachine(object):
             try:
                 result = sh.vboxmanage.startvm(self.name)
             except sh.ErrorReturnCode_1 as erc1:
-                ''' Sometimes virtualbox gives us:
+                log.warning(erc1)
+                raise
+                
+                """
+                ''' Sometimes virtualbox lies to us:
                 
                         Waiting for VM "GoodCrypto Private Server" to power on...
                         VM "GoodCrypto Private Server" has been successfully started.
@@ -469,9 +473,13 @@ class VirtualMachine(object):
                     log.warning('virtualbox exited with result code 1 but said:\n{}'.
                         format(erc1))
                     log.warning(erc1)
+                    result = None
                 else:
                     raise
-        self.check_result(result)
+                """
+                    
+        if result is not None:
+            self.check_result(result)
 
         return result
 
