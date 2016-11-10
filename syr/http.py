@@ -2,7 +2,7 @@
     HTTP utilities
 
     Copyright 2013 GoodCrypto
-    Last modified: 2015-11-17
+    Last modified: 2016-03-31
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -247,32 +247,31 @@ def header(data):
     header_data, _, _ = data.partition(http_separator)
     return header_data
 
-def is_html(params):
+def is_content_type(params, prefix):
+    ''' Return True if Content-Type sarts with prefix, else False. '''
+    
     result = (
         'Content-Type' in params and
-        params['Content-Type'].startswith('text/html'))
+        params['Content-Type'].startswith(prefix))
     return result
-
-def is_gzipped(params):
-    ''' Return True if params indicate content is gzipped, else False. '''
-
-    return (
-        'Content-Encoding' in params and
-        'gzip' in params['Content-Encoding'])
+    
+def is_html(params):
+    return is_content_type(params, 'text/html')
 
 def is_text(params):
     ''' Return True if params indicate content is text, else False. '''
 
-    return (
-        'Content-Type' in params and
-        params['Content-Type'].startswith('text/'))
+    return is_content_type(params, 'text/')
 
 def is_app_data(params):
     ''' Return True if params indicate content is application data, else False. '''
 
-    return (
-        'Content-Type' in params and
-        params['Content-Type'].startswith('application/'))
+    return is_content_type(params, 'application/')
+
+def is_image(params):
+    ''' Return True if params indicate content is image data, else False. '''
+
+    return is_content_type(params, 'image/')
 
 def content_encoding_charset(params):
     ''' Parse content-encoding charset from http response. '''
@@ -290,6 +289,13 @@ def content_encoding_charset(params):
                         charset = value.strip()
 
     return charset
+
+def is_gzipped(params):
+    ''' Return True if params indicate content is gzipped, else False. '''
+
+    return (
+        'Content-Encoding' in params and
+        'gzip' in params['Content-Encoding'])
 
 if __name__ == "__main__":
     import doctest

@@ -1,8 +1,8 @@
 '''
     HTML utilities
 
-    Copyright 2013-2014 GoodCrypto
-    Last modified: 2015-12-06
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-04-02
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -20,6 +20,198 @@ log = get_log(recreate=True)
 import HTMLParser
 
 DEBUGGING = False
+
+# Tags which will be allowed, unless we're skipping tags
+DEFAULT_GOOD_TAGS = set([
+    '!doctype',
+    'a',
+    'abbr',
+    'acronym',
+    'address',
+    'area',
+    'b',
+    'base',
+    'basefont',
+    'bdo', # !! what's this?
+    'big',
+    'blockquote',
+    'body',
+    'br',
+    'break',
+    'button',
+    'caption',
+    'center',
+    'code',
+    'col',
+    'colgroup',
+    'dd',
+    'del',
+    'dir',
+    'div',
+    'dl',
+    'dt',
+    'em',
+    'face',
+    'fieldset',
+    'font',
+    'form',
+    'frame', # !! are frame and frameset ok?
+    'frameset',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'head',
+    'hr',
+    'html',
+    'i',
+    #'iframe',
+    #'img',
+    'input',
+    'ins',
+    'isindex',
+    'kbd', # !! what's this?
+    'label',
+    'legend',
+    'li',
+    'map',
+    'menu',
+    'meta',
+    'nobr',
+    'noframes',
+    'noscript',
+    'ol',
+    'optgroup',
+    'option',
+    'p',
+    'pre',
+    'q',
+    's',
+    'samp', # what's this?
+    'select',
+    'small',
+    'span',
+    'strike',
+    'strong',
+    'sub',
+    'sup',
+    'table',
+    'tbody',
+    'td',
+    'textarea',
+    'tfoot',
+    'th',
+    'thead',
+    'title',
+    'tr',
+    'tt',
+    'u',
+    'ul',
+    'var',
+    ])
+# Tags which trigger skipping all tags, until this tag is closed
+DEFAULT_SKIPPED_TAGS = set([
+    'javascript',
+    'script',
+    ])
+# Attributes within tags which will be ignored
+# See
+#     HTML Event Attributes
+#     http://www.w3schools.com/tags/ref_eventattributes.asp
+# !!!! This should be a list of whitelisted attributes.
+#      But that requires a lot more encoded html knowledge.
+DEFAULT_BAD_ATTRIBUTES = set([
+    'javascript',
+    'script',
+    # Window Event Attributes
+    'onafterprint',
+    'onbeforeprint',
+    'onbeforeunload',
+    'onerror',
+    'onhashchange',
+    'onload',
+    'onmessage',
+    'onoffline',
+    'ononline',
+    'onpagehide',
+    'onpageshow',
+    'onpopstate',
+    'onresize',
+    'onstorage',
+    'onunload',
+    # Form Events
+    'onblur',
+    'onchange',
+    'oncontextmenu',
+    'onfocus',
+    'oninput',
+    'oninvalid',
+    'onreset',
+    'onsearch',
+    'onselect',
+    'onsubmit',
+    # Keyboard Events
+    'onkeydown',
+    'onkeypress',
+    'onkeyup',
+    # Mouse Events
+    'onclick',
+    'ondblclick',
+    'ondrag',
+    'ondragend',
+    'ondragenter',
+    'ondragleave',
+    'ondragover',
+    'ondragstart',
+    'ondrop',
+    'onmousedown',
+    'onmouseleave',
+    'onmousemove',
+    'onmouseout',
+    'onmouseover',
+    'onmouseup',
+    'onmousewheel',
+    'onscroll',
+    'onwheel',
+    # Clipboard Events
+    'oncopy',
+    'oncut',
+    'onpaste',
+    # Media Events
+    'onabort',
+    'oncanplay',
+    'oncanplaythrough',
+    'oncuechange',
+    'ondurationchange',
+    'onemptied',
+    'onended',
+    'onerror',
+    'onloadeddata',
+    'onloadedmetadata',
+    'onloadstart',
+    'onpause',
+    'onplay',
+    'onplaying',
+    'onprogress',
+    'onratechange',
+    'onseeked',
+    'onseeking',
+    'onstalled',
+    'onsuspend',
+    'ontimeupdate',
+    'onvolumechange',
+    'onwaiting',
+    # Misc Events
+    'onerror',
+    'onshow',
+    'ontoggle',
+    ])
+SOME_BAD_TAGS = ['img', 'javascript', 'script', 'style', 'video']
+
+class HtmlFirewallException(Exception):
+    pass
 
 def firewall_html(html):
     ''' Firewall html.
@@ -97,26 +289,28 @@ def firewall_html(html):
         ...     test_page_dir = os.path.join(
         ...             os.path.dirname(test_module_path),
         ...             'tests/testdata/html/HtmlFirewallFilter/pages')
+        ...     log.debug('test_page_dir: {}'.format(test_page_dir))
         ...     for filename in os.listdir(test_page_dir):
         ...         if filename != 'notes.txt':
         ...             pathname = os.path.join(test_page_dir, filename)
+        ...             log.debug('test file pathname: {}'.format(pathname))
         ...             with open(pathname) as testfile:
         ...                 original_html = testfile.read()
         ...                 try:
         ...                     firewalled_html = firewall_html(original_html)
-        ...                 except exp:
+        ...                 except Exception as exp:
+        ...                     log.debug(exp)
         ...                     raise
         ...                 else:
         ...                     # save html in /tmp
-        ...                     outname = os.path.join('/tmp', filename+'.original')
+        ...                     outname = os.path.join('/tmp', 'html-firewall-test.'+filename+'.original')
         ...                     with open(outname, 'wb') as outfile:
         ...                         outfile.write(original_html)
-        ...                     outname = os.path.join('/tmp', filename+'.firewalled')
+        ...                     outname = os.path.join('/tmp', 'html-firewall-test.'+filename+'.firewalled')
         ...                     with open(outname, 'wb') as outfile:
         ...                         outfile.write(firewalled_html)
         ...
-        ...                     bad_tags = ['javascript', 'video']
-        ...                     for bad_tag in bad_tags:
+        ...                     for bad_tag in SOME_BAD_TAGS:
         ...                         assert '<'+bad_tag not in firewalled_html, 'tag {} found in cleaned html'.format(bad_tag)
     '''
 
@@ -156,8 +350,7 @@ def firewall_html(html):
             else:
                 done = True
 
-    HTML_END_TAG_PATTERN = r'</html>' # !! why doesn't r'</\s*html\s*>' work?
-    BAD_TAGS = ['script', 'img', 'style']
+    HTML_END_TAG_PATTERN = r'</\s*html\s*>'
 
     # Strip early instances of "</html>"
     endtags = re.findall(HTML_END_TAG_PATTERN, html)
@@ -176,26 +369,51 @@ def firewall_html(html):
     # parser.feed('</html>')
     parser.close()
     firewalled_html = parser.results() + '</html>'
-
-    bad_tags_found = []
-    for tag in BAD_TAGS:
-        pattern = '<{}'.format(tag) # !! why not regex e.g. '<\s*{}'?
-        if pattern in firewalled_html:
-            bad_tags_found.append(tag)
+    
+    """ takes forever, if it's not an infinite loop
+    # if any bad tags, disable tag with '?' prefix
+    pattern = re.compile(r'(.*<\s*)([A-Za-z]+)(.*)')
+    match = pattern.search(firewalled_html)
+    if match:
+        new_firewalled_html = ''
+        
+        while match:
+            before, tag, after = match.group(1, 2, 3)
+            if not tag in DEFAULT_GOOD_TAGS:
+                log.debug('unfiltered bad tag: {}'.format(tag))
+                new_firewalled_html = new_firewalled_html + before + '?' + tag
+                match = pattern.search(after)
+                
+        firewalled_html = new_firewalled_html
+    """
+                
+    # quick check using regular expression
+    # if bad tags, raise exception
+    bad_tags_found = set()
+    for tag in SOME_BAD_TAGS:
+        pattern = r'<\s*{}'.format(tag)
+        if re.search(pattern, firewalled_html):
+            bad_tags_found.add(tag)
     if bad_tags_found:
-        msg = ('firewall_html() failed. Please save url for testing.' +
-        ' Tags passed firewall: {}'.format(bad_tags_found))
+        msg = ('firewall_html() failed. Please send url to goodcrypto.com for testing.' +
+        ' HTML tags incorrectly passed firewall: {}'.format(','.join(bad_tags_found)))
         log.error(msg)
-        log.debug('html before firewall_html():\n{}'.format(html))
-        log.debug('html after firewall_html():\n{}'.format(firewalled_html))
-        # we don't raised an exception because the only bad tags we've seen in
-        # months (2014-04-16) are false positives, and we don't have a good
+        # log.debug('html before firewall_html():\n{}'.format(html))
+        with open('/tmp/syr.html.firewall_html.failed.before', 'w') as outfile:
+            # the filtered html has line breaks before every tag
+            # so to diff, we need line breaks in the unfiltered html
+            html_with_newlines = re.sub(r'\n*\s*<\s*(?!/)', '\n<', html)
+            outfile.write(html_with_newlines)
+        # log.debug('html after firewall_html():\n{}'.format(firewalled_html))
+        with open('/tmp/syr.html.firewall_html.failed.after', 'w') as outfile:
+            firewalled_html_with_newlines = re.sub(r'\n*\s*<\s*(?!/)', '\n<', firewalled_html)
+            outfile.write(firewalled_html_with_newlines)
+        raise HtmlFirewallException(msg)
+        # we often don't raised an exception because we get false positives, and we don't have a good
         # way to ignore those false positives
         # example:
         #     https://gist.github.com/ah8r/10632982
         #     <input type="text" readonly="None" spellcheck="false" class="url-field js-url-field" name="embed-field" value="<script src="https://gist.github.com/ah8r/10632982.js"></script>">
-        # we probably need to raise a custom exception here
-        #raise AssertionError(msg)
 
     return firewalled_html
 
@@ -210,208 +428,18 @@ class HtmlFirewallFilter(HTMLParser.HTMLParser, object):
     style = "style"
     stylesheet = "stylesheet"
     link = "link"
-
-    # Tags which will be allowed, unless we're skipping tags
-    default_good_tags = [
-        '!doctype',
-        'a',
-        'abbr',
-        'acronym',
-        'address',
-        'area',
-        'b',
-        'base',
-        'basefont',
-        'bdo', # what's this?
-        'big',
-        'blockquote',
-        'body',
-        'br',
-        'break',
-        'button',
-        'caption',
-        'center',
-        'code',
-        'col',
-        'colgroup',
-        'dd',
-        'del',
-        'dir',
-        'div',
-        'dl',
-        'dt',
-        'em',
-        'face',
-        'fieldset',
-        'font',
-        'form',
-        'frame', # are frame and frameset ok?
-        'frameset',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-        'head',
-        'hr',
-        'html',
-        'i',
-        #'iframe',
-        #'img',
-        'input',
-        'ins',
-        'isindex',
-        'kbd', # what's this?
-        'label',
-        'legend',
-        'li',
-        'map',
-        'menu',
-        'meta',
-        'nobr',
-        'noframes',
-        'noscript',
-        'ol',
-        'optgroup',
-        'option',
-        'p',
-        'pre',
-        'q',
-        's',
-        'samp', # what's this?
-        'select',
-        'small',
-        'span',
-        'strike',
-        'strong',
-        'sub',
-        'sup',
-        'table',
-        'tbody',
-        'td',
-        'textarea',
-        'tfoot',
-        'th',
-        'thead',
-        'title',
-        'tr',
-        'tt',
-        'u',
-        'ul',
-        'var',
-        ]
-
-    # Tags which trigger skipping all tags, until this tag is closed
-    default_skipped_tags = [
-        'javascript',
-        'script',
-        ]
-
-    # Attributes within tags which will be ignored
-    # See
-    #     HTML Event Attributes
-    #     http://www.w3schools.com/tags/ref_eventattributes.asp
-    # !!!! This should be a list of whitelisted attributes.
-    #      But that requires a lot more encoded html knowledge.
-    default_bad_attributes = [
-        'javascript',
-        'script',
-        # Window Event Attributes
-        'onafterprint',
-        'onbeforeprint',
-        'onbeforeunload',
-        'onerror',
-        'onhashchange',
-        'onload',
-        'onmessage',
-        'onoffline',
-        'ononline',
-        'onpagehide',
-        'onpageshow',
-        'onpopstate',
-        'onresize',
-        'onstorage',
-        'onunload',
-        # Form Events
-        'onblur',
-        'onchange',
-        'oncontextmenu',
-        'onfocus',
-        'oninput',
-        'oninvalid',
-        'onreset',
-        'onsearch',
-        'onselect',
-        'onsubmit',
-        # Keyboard Events
-        'onkeydown',
-        'onkeypress',
-        'onkeyup',
-        # Mouse Events
-        'onclick',
-        'ondblclick',
-        'ondrag',
-        'ondragend',
-        'ondragenter',
-        'ondragleave',
-        'ondragover',
-        'ondragstart',
-        'ondrop',
-        'onmousedown',
-        'onmouseleave',
-        'onmousemove',
-        'onmouseout',
-        'onmouseover',
-        'onmouseup',
-        'onmousewheel',
-        'onscroll',
-        'onwheel',
-        # Clipboard Events
-        'oncopy',
-        'oncut',
-        'onpaste',
-        # Media Events
-        'onabort',
-        'oncanplay',
-        'oncanplaythrough',
-        'oncuechange',
-        'ondurationchange',
-        'onemptied',
-        'onended',
-        'onerror',
-        'onloadeddata',
-        'onloadedmetadata',
-        'onloadstart',
-        'onpause',
-        'onplay',
-        'onplaying',
-        'onprogress',
-        'onratechange',
-        'onseeked',
-        'onseeking',
-        'onstalled',
-        'onsuspend',
-        'ontimeupdate',
-        'onvolumechange',
-        'onwaiting',
-        # Misc Events
-        'onerror',
-        'onshow',
-        'ontoggle',
-        ]
-
+    
     def __init__(self, *args, **kwargs):
-        self.good_tags = HtmlFirewallFilter.default_good_tags
-        self.skipped_tags = HtmlFirewallFilter.default_skipped_tags
-        self.bad_attributes = HtmlFirewallFilter.default_bad_attributes
+        self.good_tags = DEFAULT_GOOD_TAGS
+        self.skipped_tags = DEFAULT_SKIPPED_TAGS
+        self.bad_attributes = DEFAULT_BAD_ATTRIBUTES
 
         if (HtmlFirewallFilter.allow_style_sheets):
-            self.good_tags.append(HtmlFirewallFilter.style);
-            self.good_tags.append(HtmlFirewallFilter.link);
+            self.good_tags.add(HtmlFirewallFilter.style);
+            self.good_tags.add(HtmlFirewallFilter.link);
         else:
-            self.skipped_tags.append(HtmlFirewallFilter.style);
-            self.bad_attributes.append(HtmlFirewallFilter.style);
+            self.skipped_tags.add(HtmlFirewallFilter.style);
+            self.bad_attributes.add(HtmlFirewallFilter.style);
 
         self.skipping = None
         self.preformatted = False
@@ -421,6 +449,16 @@ class HtmlFirewallFilter(HTMLParser.HTMLParser, object):
         super(HtmlFirewallFilter, self).__init__(*args, **kwargs)
 
     def handle_starttag(self, tag, attrs):
+        
+        def bad_attribute_value(value):
+            """ Check for nasty bypass of firewall. """
+             
+            is_bad = False
+            if value:
+                if '&lt;' in value or '<' in value:
+                    log.debug('unexpected "<" in attribute value')
+                    is_bad = True
+            return is_bad
 
         if tag in self.skipped_tags:
             if DEBUGGING: log.debug('start skipping tag: ' + tag)
@@ -432,6 +470,10 @@ class HtmlFirewallFilter(HTMLParser.HTMLParser, object):
             for attr, value in attrs:
                 if attr in self.bad_attributes:
                     if DEBUGGING: log.debug('bad attribute, ignored: ' + attr)
+                   
+                elif bad_attribute_value(value):
+                    log.debug('blocked bad attribute value')
+                 
                 else:
                     try:
                         self.plain_html += ' {}="{}"'.format(attr, value)
