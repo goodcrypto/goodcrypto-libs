@@ -4,13 +4,20 @@
     These classes are modeled after the ifunctions() in itertools and
     Dave Beasley's Generator Functions for System Programers.
 
-    Portions Copyright 2011 GoodCrypto
-    Last modified: 2015-10-04
+    Portions Copyright 2011-2016 GoodCrypto
+    Last modified: 2016-08-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
-import __builtin__
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    import __builtin__
+else:
+    import builtins
 from itertools import takewhile
 from threading import Event, Thread
 from time import sleep
@@ -21,10 +28,14 @@ from syr.log import get_log
 log = get_log('/tmp/iter.log')
 
 def is_iterable(item):
-    ''' Return True iff item is iterable '''
+    ''' Return True iff item is iterable. 
+    
+        >>> print(is_iterable(3))
+        False
+    '''
 
     try:
-        iter(item)
+        list(item)
     except TypeError:
         result = False
     else:
@@ -40,8 +51,12 @@ def iter(items, sentinel=None):
         try:
             if sentinel:
                 items = takewhile(lambda x: not sentinel(x), items)
-            for item in __builtin__.iter(items):
-                yield item
+            if IS_PY2:
+                for item in __builtin__.iter(items):
+                    yield item
+            else:
+                for item in builtins.iter(items):
+                    yield item
         except TypeError:
             # items is just one item
             if sentinel:
@@ -74,19 +89,24 @@ def first_true(items):
     ''' Return first item in iterable that evaluates to True.
         If all items are False, return None.
 
-        >>> print first_true([0, None, '', 'yes', 'yes again', False])
+        >>> print(first_true([0, None, '', 'yes', 'yes again', False]))
         yes
-        >>> print first_true([0, None, '', 'yes again', 'yes', False])
+        >>> print(first_true([0, None, '', 'yes again', 'yes', False]))
         yes again
-        >>> print first_true([0, None, '', False])
+        >>> print(first_true([0, None, '', False]))
         None
     '''
 
     try:
         iterable = iter(items)
-        item = iterable.next()
-        while not item:
+        if IS_PY2:
             item = iterable.next()
+            while not item:
+                item = iterable.next()
+        else:
+            item = next(iterable)
+            while not item:
+                item = next(iterable)
     except StopIteration:
         item = None
     return item
@@ -97,7 +117,7 @@ def last_true(iterable):
 
         Uses minimum memory, unlike "reverse(list(iterable))[0]".
 
-        >>> print last_true([0, None, '', 'yes', 'yes again', False])
+        >>> print(last_true([0, None, '', 'yes', 'yes again', False]))
         yes again
     '''
 
@@ -129,7 +149,7 @@ def enqueue(q, *iterables):
 
         >>> enqueue(q, iter1, iter2)
         >>> for item in dequeue(q):
-        ...     print item
+        ...     print(item)
         1
         2
         3
@@ -137,7 +157,7 @@ def enqueue(q, *iterables):
 
         >>> def dequeue_test(q, done_event):
         ...     for item in dequeue(q):
-        ...         print item
+        ...         print(item)
         ...     done_event.set()
         >>> done_event = Event()
         >>> thread = Thread(target=dequeue_test, args=(q, done_event))

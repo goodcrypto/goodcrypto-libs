@@ -23,13 +23,16 @@
         Chapter 8. VBoxManage
             http://www.virtualbox.org/manual/ch08.html
 
-    Copyright 2014 GoodCrypto
-    Last modified: 2016-02-21
+    Copyright 2014-2016 GoodCrypto
+    Last modified: 2016-10-24
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-
 from __future__ import print_function
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import os.path, sh, subprocess, re
 
@@ -185,7 +188,10 @@ Example:
     def __unicode__(self):
         """Convert to a unicode string."""
 
-        return u'%s' % str(self)
+        if IS_PY2:
+            return u'%s' % str(self)
+        else:
+            return '%s' % str(self)
 
 class NetworkAdapter(object):
     ''' VirtualBox network adapter. '''
@@ -462,10 +468,10 @@ class VirtualMachine(object):
             except sh.ErrorReturnCode_1 as erc1:
                 log.warning(erc1)
                 raise
-                
+
                 """
                 ''' Sometimes virtualbox lies to us:
-                
+
                         Waiting for VM "GoodCrypto Private Server" to power on...
                         VM "GoodCrypto Private Server" has been successfully started.
                 '''
@@ -477,7 +483,7 @@ class VirtualMachine(object):
                 else:
                     raise
                 """
-                    
+
         if result is not None:
             self.check_result(result)
 
@@ -559,13 +565,19 @@ class VirtualMachine(object):
         if result.exit_code != 0:
             raise VboxException('bad exit code {}: {}'.format(result.exit_code, result.strip()))
 
-        check_output('STDOUT', result.stdout)
+        if IS_PY2:
+            result_stdout = result.stdout
+            result_stderr = result.stderr
+        else:
+            result_stdout = result.stdout.decode()
+            result_stderr = result.stderr.decode()
+        check_output('STDOUT', result_stdout)
 
         # waitng for the vm to power on is not an error
-        if 'Waiting for VM' in result.stderr and 'to power on...' in result.stderr:
+        if 'Waiting for VM' in result_stderr and 'to power on...' in result_stderr:
             pass
         else:
-            check_output('STDERR', result.stderr)
+            check_output('STDERR', result_stderr)
 
     @staticmethod
     def list(what):
@@ -578,7 +590,8 @@ class VirtualMachine(object):
         # return sh.vboxmanage.list(what).stdout.strip().split('\n')
         command = sh.vboxmanage.list.bake()
         try:
-            result = command(what).stdout.strip().split('\n')
+            result_stdout = command(what).stdout.decode()
+            result = result_stdout.strip().split('\n')
         except OSError as ose:
             if 'out of pty devices' in str(ose):
                 import os ; os.openpty() # DEBUG
@@ -632,7 +645,7 @@ class VirtualMachine(object):
 
         match = re.search(
             "Machine settings file '(.*?)' already exists",
-            erc.stderr
+            erc.stderr.decode()
             )
 
         if match:

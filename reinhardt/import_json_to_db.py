@@ -1,12 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
     Load the tables from json files.
 
-    Copyright 2000-2014 GoodCrypto
-    Last modified: 2014-09-13
+    Copyright 2000-2016 GoodCrypto
+    Last modified: 2016-05-30
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
 import os, sh
 
 from reinhardt import get_json_dir
@@ -16,7 +21,7 @@ log = get_log()
 
 
 def import_json_files(package_dir, filenames=None):
-    
+
     if filenames is None:
         filenames = os.listdir(get_json_dir())
 
@@ -34,7 +39,10 @@ def import_data(json_name, package_dir):
     if os.path.exists(json_path):
         print('loading %s' % json_name)
         sh.cd(package_dir)
-        sh.python('manage.py', 'loaddata', json_path)
+        if IS_PY2:
+            sh.python('manage.py', 'loaddata', json_path)
+        else:
+            sh.python3('manage.py', 'loaddata', json_path)
     else:
         log('%s does not exist' % json_path)
 

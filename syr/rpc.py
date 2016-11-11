@@ -5,12 +5,13 @@
 
     Internally uses RQ.
 
-    Copyright 2015 GoodCrypto
-    Last modified: 2015-08-01
+    Copyright 2015-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 
 '''
+from __future__ import unicode_literals
 
 import redis, rq
 

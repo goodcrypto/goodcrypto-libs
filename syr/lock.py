@@ -1,11 +1,12 @@
 '''
     Locked threading.Lock context.
 
-    Copyright 2011-2012 GoodCrypto
-    Last modified: 2015-06-14
+    Copyright 2011-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
 import atexit, os, threading, traceback
 from contextlib import contextmanager
@@ -13,11 +14,11 @@ from os import O_CREAT, O_EXCL, O_RDWR
 
 DEBUGGING = False
 def _debug(msg):
-    ''' Output debug message. 
-    
+    ''' Output debug message.
+
         We don't use syr.log because that module uses this one
     '''
-    
+
     if DEBUGGING:
         print(msg)
 
@@ -55,9 +56,9 @@ def locked(lock=None, blocking=True):
 @contextmanager
 def system_locked(name):
     ''' Context manager to acquire a system wide lock.
-    
+
         !! A port might be a better lock.
-    
+
         'name' is typically '__module__' or '__file__'.
 
         See locked() for a lock within a process.
@@ -80,18 +81,18 @@ def system_locked(name):
 
     def lock():
         try:
-            # try to remove any abandoned lockfile 
+            # try to remove any abandoned lockfile
             os.remove(lockfile)
-        except OSError: 
+        except OSError:
             # no abandoned lockfile
             pass
-        
+
         try:
             lockfd = os.open(lockfile, O_CREAT|O_EXCL|O_RDWR)
             os.write(lockfd, '%d' % os.getpid())
-        except OSError: # Already locked          
+        except OSError: # Already locked
             lockfd = None
-            
+
         return bool(lockfd)
 
     def unlock():

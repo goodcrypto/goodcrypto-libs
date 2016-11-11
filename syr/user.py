@@ -1,11 +1,15 @@
 '''
     User utilities.
 
-    Copyright 2010 GoodCrypto
-    Last modified: 2015-11-18
+    Copyright 2010-2016 GoodCrypto
+    Last modified: 2016-09-06
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 from contextlib import contextmanager
 import grp, os, pwd, sh, sys, traceback
@@ -17,6 +21,7 @@ except:
 from tempfile import TemporaryFile
 
 import syr.fs
+import syr.python
 from syr.log import get_log
 log = get_log()
 
@@ -29,7 +34,12 @@ def whoami():
         >>> assert whoami() == pwd.getpwuid(os.geteuid()).pw_name
     '''
 
-    return sh.whoami().stdout.strip()
+    if IS_PY2:
+        who = sh.whoami().strip()
+    else:
+        who = sh.whoami().stdout.decode().strip()
+
+    return who
 
     # we used cli() to avoid 'OSError: out of pty devices'
     # import delayed to avoid recursive imports
@@ -42,8 +52,10 @@ def require_user(user):
 
     current_user = whoami()
     if current_user != user:
-        sys.exit('This program must be run as {}. Current user is {}.'.
-            format(user, current_user))
+        msg = 'This program must be run as {}. Current user is {}.'.format(user, current_user)
+        log.debug(msg)
+        log.debug(syr.python.stacktrace())
+        sys.exit(msg)
 
 def su(newuser, set_home_dir=True):
     ''' Login as newuser.
@@ -98,7 +110,7 @@ def sudo(username=None, set_home_dir=True):
         Otherwise sh.sudo will hang. (This is true for sh. Is NOPASSWD needed
         for this function?)
 
-        This function is unreliable with ssh, os.openpty(), and more.
+        WARNING: This function is unreliable with ssh, os.openpty(), and more.
         A workaround is to use sudo in an enclosing bash script. Or::
 
             # if not user VM_OWNER then relaunch this program
@@ -158,7 +170,7 @@ def sudo(username=None, set_home_dir=True):
                 os.seteuid(uid)
             else:
                 os.setuid(uid)
-            os.setuid(uid) # DEBUG
+            # os.setuid(uid) # DEBUG
             if set_home_dir:
                 os.environ['HOME'] = getdir(username)
             yield
@@ -174,7 +186,7 @@ def sudo(username=None, set_home_dir=True):
 
     if not username:
         username = 'root'
-        log.debug('sudo() using default user root')
+        # log.debug('sudo() using default user root')
 
     prev_user = whoami()
     if username == prev_user:
@@ -186,26 +198,28 @@ def sudo(username=None, set_home_dir=True):
     return context
 
 def force(user):
-    ''' If current user is not 'user', relaunch program as 'user'. 
-    
-    
+    ''' If current user is not 'user', relaunch program as 'user'.
+
         Example::
-                
+
             if syr.user.whoami() == 'root':
                 root_setup()
                 ...
-            
+
                 # drop privs; relaunch program as USER
                 syr.user.force(USER)
-                
+
             # continue as USER
-        
+            assert whoami() == USER
+
     '''
 
     if whoami() != user:
 
         this_program = sys.argv[0]
-        assert syr.fs.is_executable(this_program), '{} must be executable'.format(this_program)
+        # we need something like this, but this doesn't work
+        # with sudo(user):
+        #     assert syr.fs.is_executable(this_program), '{} must be executable as {}'.format(this_program, user)
 
         for f in [sys.stdout, sys.stderr]:
             f.flush()
@@ -247,7 +261,7 @@ def getuid_name(uid):
     try:
         uid = int(uid)
     except ValueError:
-        raise ValueError, 'uid is not an int: {}'.format(uid)
+        raise ValueError('uid is not an int: {}'.format(uid))
 
     name = None
     for entry in pwd.getpwall():
@@ -255,7 +269,7 @@ def getuid_name(uid):
             name = entry.pw_name
 
     if name is None:
-        raise ValueError, 'No uid {}'.format(uid)
+        raise ValueError('No uid {}'.format(uid))
 
     return name
 
@@ -282,7 +296,7 @@ def getgid_name(gid):
     try:
         gid = int(gid)
     except ValueError:
-        raise ValueError, 'gid is not an int: {}'.format(gid)
+        raise ValueError('gid is not an int: {}'.format(gid))
 
     name = None
     for entry in grp.getgrall():
@@ -290,7 +304,7 @@ def getgid_name(gid):
             name = entry.gr_name
 
     if name is None:
-        raise ValueError, 'No gid {}'.format(uid)
+        raise ValueError('No gid {}'.format(uid))
 
     return name
 

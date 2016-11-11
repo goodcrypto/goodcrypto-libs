@@ -17,14 +17,20 @@
       * Pipe Fitting with Python Generators
         http://paddy3118.blogspot.com/2009/05/pipe-fitting-with-python-generators.html
 
-    Portions Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-09-24
+    Portions Copyright 2012-2016 GoodCrypto
+    Last modified: 2016-05-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
-from itertools import imap
-from Queue import Queue
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    from Queue import Queue
+else:
+    from queue import Queue
 
 from syr.python import last_exception, last_exception_only, object_name
 from syr.utils import synchronized
@@ -42,7 +48,10 @@ def consumer(func):
 
     def start(*args,**kwargs):
         c = func(*args,**kwargs)
-        c.next()
+        if IS_PY2:
+            c.next()
+        else:
+            next(c)
         return c
     return start
 
@@ -142,7 +151,7 @@ class Pump(object):
 
         >>> class Printer(Pump):
         ...     def process(self, object):
-        ...         print object
+        ...         print(object)
         ...         return object
 
         >>> class Adder(Pump):
@@ -155,7 +164,7 @@ class Pump(object):
         ...         return object
         ...
         ...     def after(self):
-        ...         print 'total: {}'.format(self.total)
+        ...         print('total: {}'.format(self.total))
 
         >>> class Counter(Pump):
         ...
@@ -167,7 +176,7 @@ class Pump(object):
         ...         return object
         ...
         ...     def after(self):
-        ...         print 'count:{}'.format(self.count)
+        ...         print('count:{}'.format(self.count))
 
         >>> a=[1, 2, 3]
 
@@ -185,7 +194,7 @@ class Pump(object):
         >>> assert p2.total == sum(a)
         >>> assert p3.count == count
 
-        >>> print '{count} items total to {total}'.format(count=p3.count, total=p2.total)
+        >>> print('{count} items total to {total}'.format(count=p3.count, total=p2.total))
         3 items total to 6
         '''
 
@@ -199,7 +208,7 @@ class Pump(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         ''' Get and process the next item. '''
 
         try:
@@ -207,7 +216,10 @@ class Pump(object):
             # after_filter(), or there are no more objects
             done = False
             while not done:
-                object = self.source.next()
+                if IS_PY2:
+                    object = self.source.next()
+                else:
+                    object = next(self.source)
                 '''
                 if debug:
                     assert_message = 'process: {process}, object: {object}'.format(process=object_name(self.process), object=object_name(object))
@@ -327,7 +339,7 @@ class Count(Pump):
         >>> a=[2, 4, 8]
         >>> b=Count(a)
         >>> for x in b:
-        ...     print x
+        ...     print(x)
         2
         4
         8
@@ -382,7 +394,7 @@ class Coroutine(object):
         ...         return definition != 'No true Scotsman...'
         ...
         ...     def receive(self, object):
-        ...         print object
+        ...         print(object)
         ...         return object
 
         >>> coroutine = NoTrueScotsmanFilter()
@@ -393,7 +405,7 @@ class Coroutine(object):
         >>> class Test(Coroutine):
         ...
         ...     def receive(self, object):
-        ...         print '{name} {object}'.format(name=self.name(), object=object)
+        ...         print('{name} {object}'.format(name=self.name(), object=object))
         ...         return object*2
 
         >>> a = Test('a')
@@ -449,7 +461,10 @@ class Coroutine(object):
 
         self.running = True
         self._c_loop = self._loop()
-        self._c_loop.next()
+        if IS_PY2:
+            self._c_loop.next()
+        else:
+            next(self._c_loop)
 
     def _loop(self):
         ''' Receive, filter, and process each item.
@@ -527,13 +542,13 @@ class Coroutine(object):
             for sink in sinks:
                 if sink == self:
                     path.append(self.name())
-                    raise ValueError, 'path exists from sink to self: ' + ' -> '.join(path)
+                    raise ValueError('path exists from sink to self: -> {}'.format(path))
                 else:
                     path.append(sink.name())
                     check(sink.sinks)
 
         if sink == self:
-            raise ValueError, 'sink for {} is self'.format(self.name())
+            raise ValueError('sink for {} is self'.format(self.name()))
         else:
             path = [self.name(), sink.name()]
             check(sink.sinks)

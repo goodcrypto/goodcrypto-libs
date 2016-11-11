@@ -2,11 +2,12 @@
 '''
     Browser utilities.
 
-    Copyright 2012-2015 GoodCrypto
-    Last modified: 2015-09-04
+    Copyright 2012-2016 GoodCrypto
+    Last modified: 2016-05-20
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
 import re
 from syr.log import get_log
@@ -41,88 +42,92 @@ def user_agent_tags(ua):
 
     '''
 
-    ua = ua.lower()
     g = 'gecko'
     w = 'webkit'
     s = 'safari'
     browser = []
 
-    opera_webtv_matches = re.search(r'opera|webtv', ua)
-    opera_matches = re.search(r'opera(\s|\/)(\d+)', ua)
-    msie_matches = re.search(r'msie\s(\d)', ua)
+    try:
+        ua = ua.lower()
+        opera_webtv_matches = re.search(r'opera|webtv', ua)
+        opera_matches = re.search(r'opera(\s|\/)(\d+)', ua)
+        msie_matches = re.search(r'msie\s(\d)', ua)
 
-    if opera_webtv_matches is None and msie_matches is not None:
-        browser.append('ie ie' + msie_matches.group(1))
-    elif ua.find(r'firefox/2') != -1:
-        browser.append(g + ' ff2')
-    elif ua.find(r'firefox/4') != -1:
-        browser.append(g + ' ff4')
-    elif ua.find(r'firefox/3.6') != -1:
-        browser.append(g + ' ff36')
-    elif ua.find(r'firefox/3.5') != -1:
-        browser.append(g + ' ff35')
-    elif ua.find(r'firefox/3') != -1:
-        browser.append(g + ' ff3')
-    elif ua.find(r'firefox/5') != -1:
-        browser.append(g + ' ff5')
-    elif ua.find(r'gecko/') != -1:
-        browser.append(g)
-    elif opera_matches is not None:
-        browser.append('opera opera' + opera_matches.group(2))
-    elif ua.find(r'konquerer') != -1:
-        browser.append('konquerer')
-    elif ua.find(r'chrome') != -1:
-        browser.append(w + ' ' + s + ' chrome')
-    elif ua.find(r'iron') != -1:
-        browser.append(w + ' ' + s + ' iron')
-    elif ua.find(r'applewebkit/') != -1:
-        applewebkit_ver_matches = re.search(r'version\/(\d+)', ua)
-        if applewebkit_ver_matches is not None:
-            browser.append(w + ' ' + s + ' ' + s + applewebkit_ver_matches.group(1))
-        else:
-            browser.append(w + ' ' + s)
-    elif ua.find(r'mozilla/') != -1:
-        browser.append(g)
-    elif ua.find(r'chrome/') != -1:
-        browser.append('chrome')
-    elif ua.find(r'wget/') != -1:
-        browser.append('wget')
-    elif ua.find(r'lynx/') != -1:
-        browser.append('lynx')
-    elif ua.find(r'curl/') != -1:
-        browser.append('curl')
-    elif ua.find(r'unknown'):
+        if opera_webtv_matches is None and msie_matches is not None:
+            browser.append('ie ie' + msie_matches.group(1))
+        elif ua.find(r'firefox/2') != -1:
+            browser.append(g + ' ff2')
+        elif ua.find(r'firefox/4') != -1:
+            browser.append(g + ' ff4')
+        elif ua.find(r'firefox/3.6') != -1:
+            browser.append(g + ' ff36')
+        elif ua.find(r'firefox/3.5') != -1:
+            browser.append(g + ' ff35')
+        elif ua.find(r'firefox/3') != -1:
+            browser.append(g + ' ff3')
+        elif ua.find(r'firefox/5') != -1:
+            browser.append(g + ' ff5')
+        elif ua.find(r'gecko/') != -1:
+            browser.append(g)
+        elif opera_matches is not None:
+            browser.append('opera opera' + opera_matches.group(2))
+        elif ua.find(r'konquerer') != -1:
+            browser.append('konquerer')
+        elif ua.find(r'chrome') != -1:
+            browser.append(w + ' ' + s + ' chrome')
+        elif ua.find(r'iron') != -1:
+            browser.append(w + ' ' + s + ' iron')
+        elif ua.find(r'applewebkit/') != -1:
+            applewebkit_ver_matches = re.search(r'version\/(\d+)', ua)
+            if applewebkit_ver_matches is not None:
+                browser.append(w + ' ' + s + ' ' + s + applewebkit_ver_matches.group(1))
+            else:
+                browser.append(w + ' ' + s)
+        elif ua.find(r'mozilla/') != -1:
+            browser.append(g)
+        elif ua.find(r'chrome/') != -1:
+            browser.append('chrome')
+        elif ua.find(r'wget/') != -1:
+            browser.append('wget')
+        elif ua.find(r'lynx/') != -1:
+            browser.append('lynx')
+        elif ua.find(r'curl/') != -1:
+            browser.append('curl')
+        elif ua.find(r'unknown'):
+            browser.append('unknown')
+
+        #platform
+        if ua.find('j2me') != -1:
+            browser.append('j2me')
+        elif ua.find('java') != -1:
+            browser.append('java')
+        elif ua.find('python') != -1:
+            browser.append('python')
+        elif ua.find('iphone') != -1:
+            browser.append('iphone')
+        elif ua.find('ipod') != -1:
+            browser.append('ipod')
+        elif ua.find('ipad') != -1:
+            browser.append('ipad')
+        elif ua.find('android') != -1:
+            browser.append('android')
+        elif ua.find('blackberry') != -1:
+            browser.append('blackberry')
+        elif ua.find('mobile') != -1:
+            browser.append('mobile')
+        elif ua.find('mac') != -1 or ua.find('darwin') != -1:
+            browser.append('mac')
+        elif ua.find('webtv') != -1:
+            browser.append('webtv')
+        elif ua.find('win') != -1:
+            browser.append('win')
+        elif ua.find('freebsd') != -1:
+            browser.append('freebsd')
+        elif ua.find('x11') != -1 or ua.find('linux') != -1:
+            browser.append('linux')
+    except:
         browser.append('unknown')
-
-    #platform
-    if ua.find('j2me') != -1:
-        browser.append('j2me')
-    elif ua.find('java') != -1:
-        browser.append('java')
-    elif ua.find('python') != -1:
-        browser.append('python')
-    elif ua.find('iphone') != -1:
-        browser.append('iphone')
-    elif ua.find('ipod') != -1:
-        browser.append('ipod')
-    elif ua.find('ipad') != -1:
-        browser.append('ipad')
-    elif ua.find('android') != -1:
-        browser.append('android')
-    elif ua.find('blackberry') != -1:
-        browser.append('blackberry')
-    elif ua.find('mobile') != -1:
-        browser.append('mobile')
-    elif ua.find('mac') != -1 or ua.find('darwin') != -1:
-        browser.append('mac')
-    elif ua.find('webtv') != -1:
-        browser.append('webtv')
-    elif ua.find('win') != -1:
-        browser.append('win')
-    elif ua.find('freebsd') != -1:
-        browser.append('freebsd')
-    elif ua.find('x11') != -1 or ua.find('linux') != -1:
-        browser.append('linux')
+        log(format_exc())
 
     return browser
 
@@ -329,10 +334,16 @@ def is_known_spammer(referer):
         'semalt.com' in referer or
         'buttons-for-website.com' in referer or
         'buttons-for-your-website.com' in referer or
+        'see-your-website-here.com' in referer or
         'makemoneyonline.com' in referer or
         'domainsigma' in referer or
+        'darodar.com' in referer or
+        'econom.co' in referer or
+        'ilovevitaly.co' in referer or
         'best-seo-offer.com' in referer or
         'domini.cat' in referer or
+        'savetubevideo.com' in referer or
+        'kambasoft.com' in referer or
         'http://123.249.24' in referer
           )
 

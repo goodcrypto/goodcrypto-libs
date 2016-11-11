@@ -1,22 +1,23 @@
 '''
     Statistics
-    
+
     The pypi stats module is only for Python 3.1.
-    
-    This used to be named stat.py. It was renamed to avoid conflict 
+
+    This used to be named stat.py. It was renamed to avoid conflict
     with the standard library named stat.
 
-    Copyright 2010-2013 GoodCrypto
-    Last modified: 2015-02-02
+    Copyright 2010-2016 GoodCrypto
+    Last modified: 2016-04-26
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import math, numpy
 
-#from log import get_log
-
-#log = get_log()
 debug = False
 
 def mean(values):
@@ -25,7 +26,7 @@ def mean(values):
         Returns a float.
 
         When people say "average" they usually mean "mean".
- 
+
         >>> mean([6, 2, 5, 1])
         3.5
         >>> mean([5])
@@ -40,7 +41,7 @@ def median(values):
     ''' Median of an iterable.
 
         Returns a float.
-        
+
         The median is less sensitive to outliers than the mean is.
         The values do not have to be sorted since this function sorts them.
 
@@ -59,7 +60,7 @@ def median(values):
     '''
 
     values = sorted(_list(values))
-    
+
     return numpy.lib.median(numpy.array(values))
 
 def is_significant(a, b):
@@ -68,9 +69,9 @@ def is_significant(a, b):
 
         A difference may be staticially significant, but still not
         be significant. For example, if everyone in all groups in a
-        split test converts, the difference between converted and 
-        not converted is staticially significant, but the result is 
-        not siginificant because there is no difference between the 
+        split test converts, the difference between converted and
+        not converted is staticially significant, but the result is
+        not siginificant because there is no difference between the
         groups. '''
 
     return (
@@ -102,8 +103,8 @@ def smooth(raw_data, smoothing_periods):
             if period_count > smoothing_periods:
                 data.append(mean(raw_data[period_count-smoothing_periods:period_count]))
     else:
-        raise ValueError, 'Too few elements to smooth'
-        
+        raise ValueError('Too few elements to smooth')
+
     return data
 
 def percent(numerator, denominator):
@@ -125,36 +126,39 @@ def percent(numerator, denominator):
     else:
         result = None
 
-    return result    
-    
+    return result
+
 def assert_100_percent(total):
-    ''' Assert that the total is 100.0, within roundiong errors. ''' 
+    ''' Assert that the total is 100.0, within roundiong errors. '''
     assert total > 97.5000 and total < 102.5000, (
         'percentage %f should be 100' % total)
 
 def bin(kv, bins=5):
     ''' Returns keys binned by value rank.
-    
+
         kv is a dict of {key:value; ...}.
-    
+
         Pareto's law of 80:20 suggests quintiles, or 5 bins.
         We want to be able to indicate the top 20%.
         So 5 bins is the default
-    
+
         Returns a dict of {key: 1..bins, ...}. '''
-        
+
     def value_key(item):
         key, value = item
         return value, key
-        
-    def log(x):
-        print x
 
-    if debug: log('kv %r' % kv)                                                                            
+    def log(x):
+        print(x)
+
+    if debug: log('kv %r' % kv)
     binned_keys = {}
     number_of_keys = len(kv)
     if debug: log('number_of_keys %d' % number_of_keys)
-    keys_by_value = sorted(kv.iteritems(), key=value_key)
+    if IS_PY2:
+        keys_by_value = sorted(kv.iteritems(), key=value_key)
+    else:
+        keys_by_value = sorted(iter(list(kv.items())), key=value_key)
     if debug: log('keys_by_value %r' % keys_by_value)
     # !!!!! python 3
     bin_size = number_of_keys/bins
@@ -171,11 +175,11 @@ def bin(kv, bins=5):
             for index in range(start_bin, number_of_keys):
                 key, value = keys_by_value[index]
                 binned_keys[key] = bin + 1 # 1-indexed, not 0-indexed
-            
+
     if debug: log('binned_keys %r' % binned_keys)
     return binned_keys
-        
-    ''' get a float value in 0..1 for each key -- does not render well    
+
+    ''' get a float value in 0..1 for each key -- does not render well
     scaled_values = {}
     max_value = max(kv.values())
     if debug: log('max_value: %r' % max_value)
@@ -183,10 +187,10 @@ def bin(kv, bins=5):
         # !!!!! python 3
         scaled_values[key] = float(kv[key]) / max_value
     if debug: log('scaled_values: %r' % scaled_values)
-        
+
     return scaled_values
     '''
-         
+
 def _list(values):
     # numpy.lib.mean()/median() seem to have trouble with generators
     try:

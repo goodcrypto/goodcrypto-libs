@@ -1,7 +1,7 @@
 # third party software customized by goodcrypto
 
-from grammar import Parser, RegexScribe, get_all_nodes, MacroTagNode
-from macros import MacroRegistry, DefaultMacroRegistry
+from syr.surlex.grammar import Parser, RegexScribe, get_all_nodes, MacroTagNode
+from syr.surlex.macros import MacroRegistry, DefaultMacroRegistry
 import re
 
 class Surlex(object):

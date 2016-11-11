@@ -1,13 +1,12 @@
 '''
     User test decorators.
-   
-    Copyright 2009-2014 GoodCrypto
-    Last modified: 2014-01-16
+
+    Copyright 2009-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-
-
+from __future__ import unicode_literals
 
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import REDIRECT_FIELD_NAME
@@ -33,7 +32,7 @@ def staff_required(function, redirect_field_name=REDIRECT_FIELD_NAME):
         return actual_decorator(function)
     return actual_decorator
 
-    
+
 def superuser_required(function, redirect_field_name=REDIRECT_FIELD_NAME):
     ''' Superuser required decorator.'''
 

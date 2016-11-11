@@ -1,12 +1,11 @@
-import re
-from exceptions import MalformedSurlex
-from macros import MacroRegistry, DefaultMacroRegistry
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
-# Define the next function for python 2 and 3 compatibility
-try:
-    if next:
-        pass
-except NameError:
+import re
+from syr.surlex.exceptions import MalformedSurlex
+from syr.surlex.macros import MacroRegistry, DefaultMacroRegistry
+
+if IS_PY2:
     def next(iterable):
         return iterable.next()
 

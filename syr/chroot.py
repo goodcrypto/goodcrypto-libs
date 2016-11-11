@@ -1,13 +1,14 @@
 '''
     Chroot.
 
-    Copyright 2014 GoodCrypto
-    Last modified: 2015-11-11
+    Copyright 2014-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     To do: Include functionality from dbuild.rootdir.temp_chroot().
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
 from contextlib import contextmanager
 import os, os.path, sh
@@ -51,8 +52,8 @@ class Chroot(object):
                 Chroot directory.
             'bind'::
                 If bind=True then  use "mount --bind" for pseudo-filesystems.
-                Default is False. As of late 2015 jessie's chroot usually 
-                handles pseudo-filesystems without explicit mounting and 
+                Default is False. As of late 2015 jessie's chroot usually
+                handles pseudo-filesystems without explicit mounting and
                 unmounting.
         """
 
@@ -176,21 +177,21 @@ class Chroot(object):
                 sh_error(erc)
 
         return result
-        
+
         pass
-        
+
     def bind_mount_pseudo_filesystems(self):
         ''' Mount pseudo filesystems in chroot '''
 
         """
             The behavior of debian pseudo filesystems is constantly changing.
-            
+
             This simple "mount --bind" is suggested unofficially in several places.
             See "boot - How do I run update-grub from a LiveCD? - Ask Ubuntu"
                     http://askubuntu.com/questions/145241/how-do-i-run-update-grub-from-a-livecd
                 "update-grub2 in a chroot | AnySpeak.Org"
                     https://www.anyspeak.org/update-grub2-in-a-chroot/
-                
+
         """
 
         for psuedo_fs in [

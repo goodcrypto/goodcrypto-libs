@@ -2,17 +2,28 @@
 '''
     Prepare and send a MIME message.
 
-    Copyright 2015 GoodCrypto
-    Last modified: 2015-11-11
+    Copyright 2015-2016 GoodCrypto
+    Last modified: 2016-04-20
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
 import os, sh, time
-from email.Encoders import encode_base64
 from email.message import Message
 from email.mime.text import MIMEText
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEBase import MIMEBase
+if IS_PY2:
+    from email.Encoders import encode_base64
+    from email.MIMEMultipart import MIMEMultipart
+    from email.MIMEBase import MIMEBase
+else:
+    from email.encoders import encode_base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+
 from traceback import format_exc
 
 from syr import mime_constants

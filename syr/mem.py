@@ -1,11 +1,13 @@
 '''
     Memory profiling and utilities.
 
-    Portions Copyright 2011-2014 GoodCrypto
-    Last modified: 2014-07-10
+    Portions Copyright 2011-2016 GoodCrypto
+    Last modified: 2016-04-19
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import print_function
+from __future__ import unicode_literals
 
 
 import sys
@@ -102,19 +104,15 @@ class Profiler(object):
         if objects:
 
             if full:
-                #print(label, sum(Profiler.size(obj) for obj in objects), file=self.output)
-                print >> self.output, label, format(sum(Profiler.size(obj) for obj in objects))
+                print(label, format(sum(Profiler.size(obj) for obj in objects)), file=self.output)
             else:
-                #print(label, file=self.output)
-                print >> self.output, label
+                print(label, file=self.output)
 
             for obj in objects:
                 if full:
-                    #print('    ', type(obj), Profiler.size(obj), file=self.output)
-                    print >> self.output, '    ', type(obj), format(Profiler.size(obj))
+                    print('    ', type(obj), format(Profiler.size(obj)), file=self.output)
                 else:
-                    #print('    ', type(obj), file=self.output)
-                    print >> self.output, '    ', type(obj)
+                    print('    ', type(obj), file=self.output)
 
     def custom_print_diff(self, diff, full=True):
         ''' Print the return value from ObjectTracker.diff() '''

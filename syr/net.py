@@ -1,20 +1,34 @@
 '''
     Net utilities.
 
-    Copyright 2014-2015 GoodCrypto
-    Last modified: 2015-11-15
+    Copyright 2014-2016 GoodCrypto
+    Last modified: 2016-08-04
 
     There is some inconsistency in function naming.
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-from cookielib import CookieJar
-import re, sh, socket, socks, ssl, urllib2
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    from cookielib import CookieJar
+    from urllib import urlencode
+    from urllib2 import build_opener, HTTPCookieProcessor, HTTPError, ProxyHandler, Request, URLError
+else:
+    from http.cookiejar import CookieJar
+    from urllib.parse import urlencode
+    from urllib.request import build_opener, HTTPCookieProcessor, ProxyHandler, Request
+    from urllib.error import HTTPError, URLError
+
+import re, sh, socket, ssl
 from traceback import format_exc
-from urllib import urlencode
 
 from syr.log import get_log
 from syr.utils import trim
+from syr.user import whoami, require_user
 
 log = get_log()
 
@@ -57,14 +71,19 @@ def hostaddress(name=None):
 
         else:
             # socket.gethostbyname(hostname()) can be wrong depending on what is in /etc/hosts
-            interface = interface_from_ip(host_by_name)
+            # but interface_from_ip() requires we are root, and we want to continue if possible
+            if whoami() == 'root':
+                interface = interface_from_ip(host_by_name)
+                if interface and not interface == 'lo':
+                    log.debug('setting ip to host by name: {}'.format(host_by_name))
+                    ip = host_by_name
+                else:
+                    log.warning('socket.gethostbyname(hostname()) returned {}, '.format(host_by_name) +
+                        'but no interface has that address. Is /etc/hosts wrong?')
 
-            if interface and not interface == 'lo':
-                log.debug('setting ip to host by name: {}'.format(host_by_name))
-                ip = host_by_name
             else:
-                log.warning('socket.gethostbyname(hostname()) returned {}, '.format(host_by_name) +
-                    'but no interface has that address. Is /etc/hosts wrong?')
+                # accept socket.gethostbyname() because we can't verify it
+                ip = host_by_name
 
     if not ip:
         # use the first net device with an ip address, excluding 'lo'
@@ -84,20 +103,35 @@ def hostaddress(name=None):
     return ip
 
 def interfaces():
-    ''' Get net interfaces. '''
+    ''' Get net interfaces.
 
+        >>> 'lo' in interfaces()
+        True
+    '''
+
+    require_user('root')
     output = sh.ifconfig().stdout
-    return re.findall(r'^(\w+)', output, flags=re.MULTILINE)
+    if not IS_PY2:
+        output = sh.ifconfig().stdout.decode()
+    return re.findall(r'^(\S+?)\s', output, flags=re.MULTILINE)
 
 def device_address(device):
-    ''' Get device ip address '''
+    ''' Get device ip address
+
+        >>> device_address('lo')
+        '127.0.0.1'
+    '''
+
+    require_user('root')
 
     ip = None
     output = sh.ifconfig(device).stdout
+    if not IS_PY2:
+        output = output.decode()
     for line in output.split('\n'):
         m = re.match(r'.*inet addr:(\d+\.\d+\.\d+\.\d+)', line)
         if m:
-            ip = m.group(1)
+            ip = str(m.group(1))
 
     log.debug('{} ip: {}'.format(device, ip))
 
@@ -106,8 +140,11 @@ def device_address(device):
 def mac_address(device):
     ''' Get device mac address '''
 
+    require_user('root')
     mac = None
     output = sh.ifconfig(device).stdout
+    if not IS_PY2:
+        output = output.decode()
     for line in output.split('\n'):
         if not mac:
             m = re.match(r'.* HWaddr +(..:..:..:..:..:..)', line)
@@ -118,7 +155,11 @@ def mac_address(device):
     return mac
 
 def interface_from_ip(ip):
-    ''' Find interface using ip address '''
+    ''' Find interface using ip address
+
+        >>> interface_from_ip('127.0.0.1')
+        'lo'
+    '''
 
     interface_found = None
     for interface in interfaces():
@@ -169,6 +210,8 @@ def set_etc_hosts_address(hostname, ip):
         log.debug('new text:\n{}'.format(newtext))
         return newtext
 
+    require_user('root')
+
     oldlines = read_file('/etc/hosts').strip().split('\n')
     log.debug('old /etc/hosts:\n{}'.format('\n'.join(oldlines)))
 
@@ -205,18 +248,18 @@ def torify(host=None, port=None):
 
     import socket
     try:
-        import socks
+        from socks import socket, socksocket, setdefaultproxy, PROXY_TYPE_SOCKS5
     except:
-        msg = 'Requires the socks module from SocksiPy'
-        log.debug(msg)
+        msg = 'Requires the debian module from python-socksipy'
+        log(msg)
         raise Exception(msg)
 
     def create_connection(address, timeout=None, source_address=None):
         ''' Return a socksipy socket connected through tor. '''
-        
-        assert socket.socket == socks.socksocket
+
+        assert socket == socksocket
         log('create_connection() to {} through tor'.format(address))
-        sock = socks.socksocket()
+        sock = socksocket()
         sock.connect(address)
         return sock
 
@@ -225,10 +268,10 @@ def torify(host=None, port=None):
     if port is None:
         port = 9050
 
-    socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, host, port)
-    socket.socket = socks.socksocket
+    setdefaultproxy(PROXY_TYPE_SOCKS5, host, port)
+    socket.socket = socksocket
     socket.create_connection = create_connection
-    log('socket.socket and socket.create_connection now go through tor')
+    log('socket.socket and socket.create_connection now go through tor proxy at {}:{}'.format(host, port))
 
 def send_api_request(url, params, proxy_dict=None):
     '''Send a post to a url and get the response.'''
@@ -253,9 +296,11 @@ def post_data(full_url, params, proxy_dict=None, use_tor=False):
         >>> page = post_data('https://goodcrypto.com', '')
         >>> page is not None
         True
+
         >>> page = post_data('https://goodcrypto.com', '', proxy_dict={'https': 'http://127.0.0.1:8398'})
         >>> page is not None
         True
+
         >>> page = post_data('https://goodcrypto.com', '', proxy_dict={'https': '127.0.0.1:8398'}, use_tor=True)
         >>> page is not None
         True
@@ -276,30 +321,36 @@ def post_data(full_url, params, proxy_dict=None, use_tor=False):
 
         if params is not None and len(params) > 0:
             url = '{}?{}'.format(url, urlencode(params))
-        
+
         return host, url
-        
+
     def split_host_port(proxy_dict):
         # extract the proxy's host and port
         m = re.match('(\d+.\d+.\d+.\d+):(\d+)', proxy_dict['https'])
         if m:
             proxy_host = m.group(1)
             proxy_port = int(m.group(2))
-        
-        return proxy_host, proxy_port
-        
-    page = None
 
+        return proxy_host, proxy_port
+
+    try:
+        from socks import socksocket, Socks5Error, PROXY_TYPE_SOCKS5
+        log('imported socks in post_data')
+    except:
+        msg = 'Requires the debian module from python-socksipy'
+        log(msg)
+        raise Exception(msg)
+
+    page = None
     try:
         if use_tor:
             CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
-            
 
             host, url = split_host_url(full_url)
             proxy_host, proxy_port = split_host_port(proxy_dict)
-            
-            s = socks.socksocket()
-            s.setproxy(socks.PROXY_TYPE_SOCKS5, proxy_host, port=proxy_port)
+
+            s = socksocket()
+            s.setproxy(PROXY_TYPE_SOCKS5, proxy_host, port=proxy_port)
             log('connecting to {}'.format(host))
             s.connect((host, 443))
             log('connected to {}'.format(host))
@@ -319,25 +370,39 @@ def post_data(full_url, params, proxy_dict=None, use_tor=False):
             page = "".join(content)
         else:
             if proxy_dict is None:
-                opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
+                opener = build_opener(HTTPCookieProcessor(CookieJar()))
             else:
-                proxy_handler = urllib2.ProxyHandler(proxy_dict)
-                opener = urllib2.build_opener(proxy_handler, urllib2.HTTPCookieProcessor(CookieJar()))
-    
-            request = urllib2.Request(full_url, urlencode(params))
+                proxy_handler = ProxyHandler(proxy_dict)
+                opener = build_opener(proxy_handler, HTTPCookieProcessor(CookieJar()))
+
+            if params is None or len(params) < 1:
+                encoded_params = None
+            else:
+                if IS_PY2:
+                    encoded_params = urlencode(params)
+                else:
+                    encoded_params = urlencode(params).encode()
+                log('params: {}'.format(params)) #DEBUG
+                log('encoded params: {}'.format(encoded_params)) #DEBUG
+                log('type encoded params: {}'.format(type(encoded_params))) #DEBUG
+            request = Request(full_url, encoded_params)
+
             handle = opener.open(request)
             page = handle.read()
 
-    except urllib2.HTTPError as http_error:
+    except HTTPError as http_error:
         page = None
         log('full_url: {}'.format(full_url))
         log('http error: {}'.format(str(http_error)))
-        log(format_exc())
 
-    except socks.Socks5Error:
+    except Socks5Error as socks_error:
         page = None
-        log('socks error while connecting to full_url: {}'.format(full_url))
-        
+        log('{} to {}'.format(socks_error, full_url))
+
+    except URLError as url_error:
+        page = None
+        log('{} to {}'.format(url_error, full_url))
+
     except:
         page = None
         log('full_url: {}'.format(full_url))

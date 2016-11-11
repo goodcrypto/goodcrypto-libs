@@ -9,15 +9,16 @@
         Fetch bookmarks from Browser using Python - Jay Rambhia
         http://www.jayrambhia.com/blog/fetch-bookmarks-from-browser-using-python/
 
-    Portions Copyright 2014 GoodCrypto
+    Portions Copyright 2014-2016 GoodCrypto
 
-    Last modified: 2014-12-01
+    Last modified: 2016-04-20
 '''
+from __future__ import unicode_literals
 
 import datetime
-import sys
 import json
 import os
+import sys
 import time
 import pickle
 
@@ -76,8 +77,8 @@ def bookmarks(input):
 
 def main():
     def timestamp_string(seconds):
-        return seconds 
-        
+        return seconds
+
     if len(sys.argv) != 2:
         usage()
 

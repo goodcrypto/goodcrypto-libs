@@ -1,13 +1,17 @@
 '''
     Dict utilities.
 
-    Copyright 2013-2015 GoodCrypto
-    Last modified: 2015-09-24
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-08-03
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
 import collections, datetime, types
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 from syr.format import pretty
 from syr.log import get_log
@@ -28,6 +32,7 @@ class CaseInsensitiveDict(collections.Mapping):
         if d is None:
             d = {}
         self._d = d
+        # _s is a dict mapping lowercase _d keys to actual _d keys
         self._s = dict((k.lower(), k) for k in d)
 
     def __contains__(self, k):
@@ -49,6 +54,12 @@ class CaseInsensitiveDict(collections.Mapping):
     def __delitem__(self, k):
         del self._d[self._s[k.lower()]]
         del self._s[k.lower()]
+
+    def __str__(self):
+        strings = []
+        for key in self._d:
+            strings.append('{}: {}'.format(key, self._d[key]))
+        return ', '.join(strings)
 
     def pop(self, k):
         k0 = self._s.pop(k.lower())
@@ -115,7 +126,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         ...         self.h = datetime.time(1, 2, 3, 4)
 
         >>> test = Test()
-        >>> print pretty(dictify(test))
+        >>> print(pretty(dictify(test)))
         {
         'a': 1,
         'b': 'hi',
@@ -152,7 +163,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
 
         >>> import datetime
         >>> d = datetime.date(2000, 12, 1)
-        >>> print pretty(dictify(d))
+        >>> print(pretty(dictify(d)))
         {
         'day': 1,
         'month': 12,
@@ -160,13 +171,13 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         }
 
         >>> d = {datetime.date(2001, 12, 1): 1}
-        >>> print pretty(dictify(d))
+        >>> print(pretty(dictify(d)))
         {
         {'month': 12, 'day': 1, 'year': 2001}: 1,
         }
 
         >>> d = {1: datetime.date(2002, 12, 1)}
-        >>> print pretty(dictify(d))
+        >>> print(pretty(dictify(d)))
         {
         1: {
         'day': 1,
@@ -184,7 +195,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         ...     def instance_function(self):
         ...         return 3
         >>> old_c = OldStyleClass()
-        >>> print pretty(dictify(old_c))
+        >>> print(pretty(dictify(old_c)))
         {
         'class_data': 27,
         'instance_data': 'idata',
@@ -199,7 +210,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         ...     def instance_function(self):
         ...         return 3
         >>> new_c = NewStyleClass()
-        >>> print pretty(dictify(new_c))
+        >>> print(pretty(dictify(new_c)))
         {
         'class_data': 27,
         'instance_data': 'idata',
@@ -207,17 +218,30 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
 
     '''
 
-    allowed_types = (
-            types.NoneType,
-            types.BooleanType,
-            types.IntType, types.LongType, types.FloatType, types.ComplexType,
-            # ?? StringTypes is itself a tuple; can we nest it like this?
-            types.StringTypes,
-            types.TupleType, types.ListType, types.DictType,
-            types.InstanceType, types.MethodType, types.FunctionType,
-            types.ModuleType,
-            types.GeneratorType,
-            ) + datetime_types
+    if IS_PY2:
+        allowed_types = (
+                types.NoneType,
+                types.BooleanType,
+                types.IntType, types.LongType, types.FloatType, types.ComplexType,
+                # ?? StringTypes is itself a tuple; can we nest it like this?
+                types.StringTypes,
+                types.TupleType, types.ListType, types.DictType,
+                types.InstanceType, types.MethodType, types.FunctionType,
+                types.ModuleType,
+                types.GeneratorType,
+                ) + datetime_types
+    else:
+        allowed_types = (
+                type(None),
+                bool,
+                int, int, float, complex,
+                # ?? StringTypes is itself a tuple; can we nest it like this?
+                str,
+                tuple, list, dict,
+                types.InstanceType, types.MethodType, types.FunctionType,
+                types.ModuleType,
+                types.GeneratorType,
+                ) + datetime_types
 
     def type_allowed(obj):
         return (isinstance(obj, allowed_types) or
@@ -245,7 +269,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         return obj
 
     def resolve_string(obj):
-        ''' Return object if unicode, else return str().
+        ''' Return object if unicode, else return str.
 
             Starting with python 2.6 all strings are unicode.
             But for readability we use a plain string where possible. '''
@@ -253,7 +277,7 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         try:
             value = str(obj)
         except:
-            value = unicode(obj)
+            value = '{}'.format(obj)
 
         return value
 
@@ -314,8 +338,12 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
 
             if json_compatible:
                # convert key to a json compatible type
-               if not isinstance(new_key, (str, unicode, int, long, float, bool, None)):
-                   new_key = repr(new_key)
+               if IS_PY2:
+                   if not isinstance(new_key, (str, unicode, int, long, float, bool, None)):
+                       new_key = repr(new_key)
+               else:
+                   if not isinstance(new_key, (str, int, float, bool, None)):
+                       new_key = repr(new_key)
 
             new_value = resolve_obj(obj[key])
 
@@ -377,7 +405,10 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                             try:
                                 if global_debug: log('%r is a MethodType' % attr)
                                 # try calling it with no args (except self, i.e. the instance)
-                                d[name] = resolve_obj(apply(attr, [instance]))
+                                if IS_PY2:
+                                    d[name] = resolve_obj(apply(attr, [instance]))
+                                else:
+                                    d[name] = resolve_obj(attr(*[instance]))
                             except:
                                 log_needs_params(instance, name)
 
@@ -386,7 +417,10 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
                             try:
                                 if global_debug: log('%r is a FunctionType' % attr)
                                 # this tries static methods that take no args
-                                d[name] = resolve_obj(apply(attr, []))
+                                if IS_PY2:
+                                    d[name] = resolve_obj(apply(attr, []))
+                                else:
+                                    d[name] = resolve_obj(attr(*[]))
                             except:
                                 log_needs_params(instance, name)
 
@@ -417,9 +451,14 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         global global_debug
 
         d = DictObject({})
-        for k, v in module.__dict__.items():
-            if not k.startswith('__'):
-                d[k] = v
+        if IS_PY2:
+            for k, v in module.__dict__.items():
+                if not k.startswith('__'):
+                    d[k] = v
+        else:
+            for k, v in list(module.__dict__.items()):
+                if not k.startswith('__'):
+                    d[k] = v
 
         return d
 
@@ -436,52 +475,77 @@ def dictify(obj, deep=False, circular_refs_error=False, json_compatible=False, d
         if global_debug: log('resolve_obj(%s) type %s' % (obj, type(obj)))
         obj = check_circular_reference(obj)
 
-        if (isinstance(obj, types.StringTypes)):
-            value = resolve_string(obj)
+        value = None
+        if IS_PY2:
+            if (isinstance(obj, types.StringTypes)):
+                value = resolve_string(obj)
 
-        elif (isinstance(obj, types.TupleType) or
-            isinstance(obj, types.GeneratorType)):
+            elif (isinstance(obj, types.TupleType) or
+                isinstance(obj, types.GeneratorType)):
 
-            # immutable iterators
-            value = tuple(resolve_obj(item) for item in obj)
-            if global_debug: log('resolve_obj(%s) value is tuple: %r' % (obj, value))
+                # immutable iterators
+                value = tuple(resolve_obj(item) for item in obj)
+                if global_debug: log('resolve_obj(%s) value is tuple: %r' % (obj, value))
 
-        elif isinstance(obj, types.ListType):
+            elif isinstance(obj, types.ListType):
 
-            # mutable iterator
-            value = list(resolve_obj(item) for item in obj)
-            if global_debug: log('resolve_obj(%s) value is list: %r' % (obj, value))
+                # mutable iterator
+                value = list(resolve_obj(item) for item in obj)
+                if global_debug: log('resolve_obj(%s) value is list: %r' % (obj, value))
 
-        elif isinstance(obj, types.DictType):
+            elif isinstance(obj, types.DictType):
 
-            value = resolve_dict(obj, json_compatible=json_compatible)
-            if global_debug: log('resolve_obj(%s) value is dict: %r' % (obj, value))
-
-        elif isinstance(obj, datetime_types):
-
-            value = resolve_datetime(obj)
-
-        elif is_class_instance(obj):
-
-            value = resolve_instance(obj)
-            if global_debug: log('resolve_obj(%s) value is instance: %r' % (obj, value))
-
-        elif isinstance(obj, types.ModuleType):
-
-            value = resolve_module(obj)
-            if global_debug: log('resolve_obj(%s) value is module: %r' % (obj, value))
-
-        elif type_allowed(obj):
-            value = obj
-            if global_debug: log('resolve_obj(%s) value is allowed type: %s' % (obj, type(obj)))
+                value = resolve_dict(obj, json_compatible=json_compatible)
+                if global_debug: log('resolve_obj(%s) value is dict: %r' % (obj, value))
 
         else:
-            # any other type as just the type, not restorable
-            value = str(type(obj))
-            if not value in _unimplemented_types:
-                # mention each type just once
-                _unimplemented_types.add(value)
-                if global_debug: log('resolve_obj(%s) value is unimplemented type: %s' % (obj, value))
+            if (isinstance(obj, str)):
+                value = resolve_string(obj)
+
+            elif (isinstance(obj, tuple) or
+                isinstance(obj, types.GeneratorType)):
+
+                # immutable iterators
+                value = tuple(resolve_obj(item) for item in obj)
+                if global_debug: log('resolve_obj(%s) value is tuple: %r' % (obj, value))
+
+            elif isinstance(obj, list):
+
+                # mutable iterator
+                value = list(resolve_obj(item) for item in obj)
+                if global_debug: log('resolve_obj(%s) value is list: %r' % (obj, value))
+
+            elif isinstance(obj, dict):
+
+                value = resolve_dict(obj, json_compatible=json_compatible)
+                if global_debug: log('resolve_obj(%s) value is dict: %r' % (obj, value))
+
+        if value is None:
+            if isinstance(obj, datetime_types):
+
+                value = resolve_datetime(obj)
+
+            elif is_class_instance(obj):
+
+                value = resolve_instance(obj)
+                if global_debug: log('resolve_obj(%s) value is instance: %r' % (obj, value))
+
+            elif isinstance(obj, types.ModuleType):
+
+                value = resolve_module(obj)
+                if global_debug: log('resolve_obj(%s) value is module: %r' % (obj, value))
+
+            elif type_allowed(obj):
+                value = obj
+                if global_debug: log('resolve_obj(%s) value is allowed type: %s' % (obj, type(obj)))
+
+            else:
+                # any other type as just the type, not restorable
+                value = str(type(obj))
+                if not value in _unimplemented_types:
+                    # mention each type just once
+                    _unimplemented_types.add(value)
+                    if global_debug: log('resolve_obj(%s) value is unimplemented type: %s' % (obj, value))
 
         if global_debug: log('resolve_obj(%s) final type: %s, value: %r' % (obj, type(value), value))
         assert not isinstance(value, datetime_types) #DEBUG
@@ -517,22 +581,22 @@ class DictObject(dict):
         >>> print('test repr')
         test repr
         >>> x = Test()
-        >>> print repr(x)
+        >>> print(repr(x))
         ... # doctest: +ELLIPSIS
         <__main__.Test ...
 
         >>> print('test dictify')
         test dictify
         >>> d = dictify(x)
-        >>> print repr(d)
+        >>> print(repr(d))
         {'a': 1, 'c': {'a': 1, 'b': 'hi'}, 'b': 'hi'}
 
         >>> print('test DictObject')
         test DictObject
         >>> o = DictObject(d)
-        >>> print repr(o)
+        >>> print(repr(o))
         {'a': 1, 'c': {'a': 1, 'b': 'hi'}, 'b': 'hi'}
-        >>> print dir(o)
+        >>> print(dir(o))
         ['a', 'b', 'c']
         >>> o.a
         1
@@ -550,7 +614,7 @@ class DictObject(dict):
         >>> print('test dictify(DictObject)')
         test dictify(DictObject)
         >>> d2 = dictify(o)
-        >>> print repr(d2)
+        >>> print(repr(d2))
         {'a': 1, 'c': {'a': 1, 'b': 'hi'}, 'b': 'hi'}
     '''
 
@@ -558,10 +622,16 @@ class DictObject(dict):
         return self[name]
 
     def __setattr__(self, name, value):
-        if isinstance(name, types.DictType):
-            name = DictObject(name)
-        if isinstance(value, types.DictType):
-            value = DictObject(value)
+        if IS_PY2:
+            if isinstance(name, types.DictType):
+                name = DictObject(name)
+            if isinstance(value, types.DictType):
+                value = DictObject(value)
+        else:
+            if isinstance(name, dict):
+                name = DictObject(name)
+            if isinstance(value, dict):
+                value = DictObject(value)
         self[name] = value
 
     def __delattr__(self, name):

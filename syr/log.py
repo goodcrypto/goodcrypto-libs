@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from __future__ import unicode_literals
 '''
-    Logging.
-
-    Much simpler and more powerful python logging.
+    Python logging for humans.
 
       * Instant logs. No complex setup.
       * Logs have useful default names.
@@ -13,7 +12,7 @@ from __future__ import print_function
       * A master log for each user shows you all log entries in order.
 
     >>> import syr.log
-    >>> log = syr.log.get_log()
+    >>> log = syr.log.open()
     >>> log('message')
 
     The default log file is "/var/local/log/USER/MODULE.log".
@@ -32,20 +31,26 @@ from __future__ import print_function
     You can specify a log pathname.
     >>> log = get_log('/tmp/special.log')
     >>> log('log message to specified path')
+    
+    Log an exceptions and get a traceback:
+    >>> try:
+    ...     raise Exception('test')
+    ... except Exception as exc:
+    ...     log(exc)
 
-    The default automatic managed logging works especially well in complex
-    systems when apps run as separate users, but the apps share modules that
-    generate their own logs. There's no conflict over which user owns a
-    module's log.
+    The log defaults work especially well in complex systems when apps run 
+    as separate users, but the apps share modules that generate their own 
+    logs. There's no conflict over which user owns a module's log. There 
+    are no jumbled log lines from different users or processes.
 
     If a program that doesn't use syr.log needs to access a log directory
     in /var/local/log, you may need to create /var/local/log/USER in advance.
 
     Bugs:
-        Log.info() can write to more than one log.
+        Log.info() can write to more than one log. (may be fixed)
 
-    Copyright 2008-2015 GoodCrypto
-    Last modified: 2015-11-19
+    Copyright 2008-2016 GoodCrypto
+    Last modified: 2016-07-11
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
@@ -88,10 +93,12 @@ from __future__ import print_function
 
         log(...)
 """
-# delete in python 3
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
 
 import atexit, logging, os, os.path, pwd, sh, shutil, smtplib, stat, sys
 import tempfile, threading, time, traceback
@@ -111,7 +118,7 @@ BASE_LOG_DIR = '/var/local/log'
 # goodcrypto, www-data, and one for each local user. Each subdirectory should be
 # owned by its user. If a program that doesn't use syr.log needs a directory,
 # you may need to create it in advance.
-BASE_LOG_DIR_PERMS = 0777
+BASE_LOG_DIR_PERMS = 0o777
 
 logs = {}
 _master_logs = {}
@@ -128,8 +135,9 @@ _raise_logging_errors = False
 _DEBUGGING = False
 _DEBUGGING_LOG_REMOVE_DISABLE = False
 
-_DEFAULT_LOG_DIR_PERMS = 0755
-_DEFAULT_PERMS = 0644
+_DEFAULT_LOG_DIR_PERMS = 0o755
+_DEFAULT_PERMS = 0o644
+TOTAL_WORLD_ACCESS = 0o666
 
 # set these values if you want mail sent if a serious error occurs
 alert_from_address = None
@@ -151,7 +159,7 @@ basic_logging_file = tempfile.NamedTemporaryFile(
     mode='a',
     prefix='syr.logs.default.', suffix='.log',
     delete=True)
-os.chmod(basic_logging_file.name, 0666)
+os.chmod(basic_logging_file.name, TOTAL_WORLD_ACCESS)
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
                     # using os.devnull results in "Bad file descriptor" when
@@ -285,7 +293,7 @@ class _Log(object):
         self.stdout_stack = []
 
     def __call__(self, message, verbose=None, audible=None, exception=None):
-        ''' Output log message, optionally also to stdout and audibly.
+        ''' Output message to log.debug, optionally also to stdout and audibly.
 
             If verbose=True, this log message will also be printed to stdout.
             If verbose=False, this message will not printed to stdout, even if
@@ -300,7 +308,8 @@ class _Log(object):
             If exception=True, the last exception will be logged.
         '''
 
-        self.write(message)
+        self.debug(message)
+        # previously was "self.write(message)". did some caller specify 'DEBUG', 'INFO' etc?
 
         if not self.is_master():
 
@@ -348,9 +357,14 @@ class _Log(object):
         global _raise_logging_errors
 
         try:
+            from syr.python import is_string
 
-            message = self.no_control_chars(message)
-            self._write(message)
+            if is_string(message):
+                self._write(message)
+            elif isinstance(message, bytes) or isinstance(message, bytearray):
+                self._write(message.decode(errors='replace'))
+            else:
+                self.write('unable to write message because it is a {}'.format(type(message)))
 
             if self.verbose:
                 print(message)
@@ -359,6 +373,17 @@ class _Log(object):
                     _master_logs[self.user]._write('- %s - %s' % (self.filename, message))
                 except UnicodeDecodeError:
                     _master_logs[self.user]._write('- %s - !! Unable to log message -- UnicodeDecodeError !!' % (self.filename))
+
+        except UnicodeDecodeError:
+            try:
+                _debug(message.decode(errors='replace'))
+            except UnicodeDecodeError:
+                self.write('unable to write message because it is a type: {}'.format(type(message)))
+                subject = '!! Unable to log message !!'
+                self._write(subject)
+                if _raise_logging_errors:
+                    _raise_logging_errors = False
+                    notify_webmaster(message)
 
         except:
 
@@ -386,7 +411,7 @@ class _Log(object):
                     self.last_exception()
 
             try:
-                self.logger_debug(message)
+                self.logger_debug(str(message))
             except:
                 self.last_exception()
 
@@ -396,35 +421,55 @@ class _Log(object):
         self.log('INFO', msg, *args, **kwargs)
 
     def debug(self, msg, *args, **kwargs):
-        ''' Compatibility with standard python logging. '''
+        ''' Compatibility with standard python logging. 
+        
+            If the message is an Exception, Log.debug() logs everything we 
+            know about the Exception. If you call Log.warning() etc. and 
+            want Exception details, also call log.debug().
+        '''
 
-        # for debug log entries, if the message is an Exception
-        # then log everything we know
-        if isinstance(msg, Exception):
+        if isinstance(msg, UnicodeError):
+            
+            # don't log the bad data; it screws up some editors
+            self.debug(traceback.format_exception_only(type(msg), msg))
+            self.debug('UnicodeError stacktrace:\n' + '    '.join(traceback.format_stack()))
 
-            # log any Exception args
-            try:
-                msg.args
-            except AttributeError:
-                pass
-            else:
-                if type(msg.args) is tuple:
-                    self.debug(' '.join(map(str, list(msg.args))))
+        elif isinstance(msg, Exception):
+            
+            if msg.args:
+                # log any Exception args
+                try:
+                    msg.args
+                    
+                except AttributeError:
+                    pass
+                    
                 else:
-                    self.debug(msg.args)
+                    if type(msg.args) is tuple:
+                        try:
+                            self.debug(' '.join(map(str, list(msg.args))))
+                        except UnicodeDecodeError:
+                            self.debug(b' '.join(map(bytes, list(msg.args))))
+                    else:
+                        self.debug(msg.args)
 
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            if exc_value == msg:
+            
+            # is the exc_info for this Exception?
+            if type(exc_value) == type(msg) and str(exc_value) == str(msg):
                 # in python 2.7 traceback.format_exception() does not perform as docced
                 # it does not format the entire stack
-                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                lines = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=1000)
                 msg = ''.join(lines).strip()
             else:
-                # the msg Exception is not the most recent, so no traceback
+                # the msg Exception is not the most recent, so no traceback for this exception
                 self.debug('log.debug() called with an exception but no traceback available')
                 msg = traceback.format_exception_only(type(msg), msg)
+                
+            self.log('DEBUG', msg)
 
-        self.log('DEBUG', msg, *args, **kwargs)
+        else:
+            self.log('DEBUG', msg, *args, **kwargs)
 
     def warning(self, msg, *args, **kwargs):
         ''' Compatibility with standard python logging. '''
@@ -457,7 +502,13 @@ class _Log(object):
                 level = ''
 
             try:
-                message = unicode(message, encoding='utf-8', errors='replace')
+                if IS_PY2:
+                    message = unicode(message, encoding='utf-8', errors='replace')
+                else:
+                    if isinstance(message, Exception):
+                        message = str(message)
+                    elif isinstance(message, bytes) or isinstance(message, bytearray):
+                        message = message.decode(errors='replace')
             except TypeError:
                 # don't change message. but would it be better to still encode as utf8?
                 pass
@@ -555,7 +606,14 @@ class _Log(object):
     def is_master(self):
         ''' Return whether this log is a master log. '''
 
-        return self == _master_logs[self.user]
+        if self.user is None:
+            self.user = syr._log.whoami()
+        if self.user is None:
+            master = False
+        else:
+            master = self == _master_logs[self.user]
+
+        return master
 
     def last_exception(self, message=None):
         ''' Try to notify of last exception.
@@ -592,35 +650,28 @@ class _Log(object):
             # the next write() should open the log as the right user
             self.close()
 
-    def no_control_chars(self, text):
-        ''' Replace control characters other than '\t', '\n' and '\r'
-            with '?'.
-        '''
+def get_log(filename=None, dirname=None, group=None, recreate=False, verbose=False):    
+    ''' get_log() is the deprecated name for open(). '''
+    
+    return open(filename=filename, dirname=dirname, group=group, recreate=recreate, verbose=verbose)
 
-        newtext = ''
-        for ch in str(text):
-            if ch < ' ' and ch != '\t' and ch != '\n' and ch != '\r':
-                ch = '?'
-            newtext = newtext + ch
-        return newtext
-
-def get_log(filename=None, dirname=None, group=None, recreate=False, verbose=False):
-    ''' Returns an instance of _Log().
-
+def open(filename=None, dirname=None, group=None, recreate=False, verbose=False):
+    ''' Open log. Default is a log for the calling module.
+    
         The default log path is "BASE_LOG_DIR/USER/MODULE.log".
         If filename is specified and starts with a '/', it is the log path.
         If filename is specified and does not start with a '/', it replaces "MODULE.log".
         If dirname is specified, it replaces "BASE_LOG_DIR/USER".
 
-        Logs are cached by pathname.
+        Log instances are cached by pathname.
 
-        If recreate=True and the log file is not already open, first removes any existing log file.
+        If recreate=True and the log file is not already open, any existing 
+        log file is removed.
 
         >>> import os.path
-        >>> from syr.log import get_log
+        >>> import syr.log
 
-        >>> from syr.log import get_log
-        >>> log = get_log('testlog3.log')
+        >>> log = syr.log.open('testlog3.log')
         >>> log('log message')
         >>> user_log_dir = os.path.join(BASE_LOG_DIR, syr._log.whoami())
         >>> assert os.path.dirname(log.pathname) == user_log_dir
@@ -630,8 +681,7 @@ def get_log(filename=None, dirname=None, group=None, recreate=False, verbose=Fal
         >>> print(log.dirname)
         /tmp/logs
 
-        >>> from syr.log import get_log
-        >>> log = get_log('/tmp/testlog2.log')
+        >>> log = syr.log.open('/tmp/testlog2.log')
         >>> log('log message')
         >>> print(log.dirname)
         /tmp
@@ -765,7 +815,7 @@ def makedir(dirname, perms=_DEFAULT_LOG_DIR_PERMS):
         try:
             os.makedirs(dirname, perms)
         except:
-            from fs import why_file_permission_denied
+            from syr.fs import why_file_permission_denied
             why = why_file_permission_denied(dirname, perms)
             print('syr.log: Could not create log dir: {}'.format(why), file=sys.stderr)
             _debug(why, force=True)

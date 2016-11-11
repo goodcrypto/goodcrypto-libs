@@ -1,4 +1,4 @@
-from exceptions import MacroDoesNotExist
+from syr.surlex.exceptions import MacroDoesNotExist
 
 class MacroRegistry(object):
     macros = {}

@@ -13,18 +13,22 @@
         /etc/init.d/bluetooth
     Renaming modules doesn't help when bluetooth etc. is in the kernel.
 
-    Copyright 2013-2015 GoodCrypto
-    Last modified: 2015-11-01
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-06-05
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 from __future__ import print_function
+from __future__ import unicode_literals
 
-# delete in python 3
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    import sys
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
 
 import os, os.path, sh, shutil, traceback
 from glob import glob
@@ -113,7 +117,7 @@ def stop_wireless():
         service_path = '/usr/local/sbin/service'
         with open(service_path, 'w') as service_file:
             service_file.write(service_script_text)
-        os.chmod(service_path, 0755)
+        os.chmod(service_path, 0o755)
     assert sh.which('service')
 
     try:
@@ -222,6 +226,41 @@ def harden_ssh_server(chroot=None):
         config_file.write('\n# following lines added by goodcrypto harden_ssh_server()')
         for line in new_config_lines:
             config_file.write(line + '\n')
+            
+def make_random_fast():
+    ''' Link /dev/random to /dev/urandom.
+
+        See
+            Myths about /dev/urandom
+                http://www.2uo.de/myths-about-urandom/
+            Hacker news discussion where cperciva does not disagree with "Myths about /dev/urandom"
+                https://news.ycombinator.com/item?id=10149019
+
+        The risk of using urandom is that it can be deterministic.
+        If you know the seed, you may know all of urandom's output forever.
+
+        That is why we prefer to add entropy at runtime, using e.g. haveged.
+        But does haveged affect urandom? The urandom seed may be set just
+        once and saved, or set at boot before haveged runs.
+    '''
+    
+    # delete /dev/random
+    if os.path.exists('/dev/random'):
+        if os.path.isfile('/dev/random') or os.path.islink('/dev/random'):
+            os.remove('/dev/random')
+        else:
+            try:
+                sh.umount('/dev/random')
+            except:
+                sh.rm('--force', '--recursive', '/dev/random')
+
+    # "rngd -r /dev/urandom" should only be used during testing, if ever
+    # if not is_program_running('rngd'):
+    #     sh.rngd('-r', '/dev/urandom')
+
+    sh.ln('--symbolic', '/dev/urandom', '/dev/random')
+    # os.mkdir('/dev/random')
+    # sh.mount('--bind', '/dev/urandom', '/dev/random')
 
 def make_dir_unused(standard_dir):
     ''' If the standard dir exists, then rename it to "-unused".

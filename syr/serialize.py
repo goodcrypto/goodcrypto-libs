@@ -11,8 +11,8 @@
     wins. Default serializers should be set in order of increasing
     preference.
 
-    Copyright 2014 GoodCrypto.
-    Last modified: 2015-09-24
+    Copyright 2014-2016 GoodCrypto.
+    Last modified: 2016-05-27
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 
@@ -75,11 +75,16 @@
     {'datetime': {'hour': 4, 'month': 2, 'second': 0, 'microsecond': 0, 'year': 1, 'tzinfo': None, 'day': 3, 'minute': 5}}
 
 
-    Copyright 2013 GoodCrypto
+    Copyright 2013-2016 GoodCrypto
     Last modified: 2014-01-08
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import datetime, os, pickle, tempfile
+
 from syr.dict import dictify, DictObject
 from syr.format import pretty
 from syr.log import get_log
@@ -99,7 +104,10 @@ def json_date_handler(obj):
 class _Test(object):
     a = 1
     b = 'a'
-    c = unichr(1234)
+    if IS_PY2:
+        c = unichr(1234)
+    else:
+        c = chr(1234)
 
     def __init__(self):
         self.d = {'x': 2, 'y': 'b'}
@@ -312,7 +320,7 @@ class Dictify(AbstractSerializer):
             pretty_encoded = pretty(encoded, indent=4)
             # log('Dictify.encode pretty_encoded: %s' % pretty_encoded)
             debug_store.write(pretty_encoded) #DEBUG
-            os.chmod(debug_store.name, 0664) #DEBUG
+            os.chmod(debug_store.name, 0o664) #DEBUG
             log('Dictify.encode saved to %s' % debug_store.name) #DEBUG
         return encoded
 

@@ -1,11 +1,13 @@
 '''
     Get and save a singleton record.
 
-    Copyright 2015 GoodCrypto
-    Last modified: 2015-11-29
+    Copyright 2015-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
 from traceback import format_exc
 
 from syr.lock import locked
@@ -22,7 +24,8 @@ def get_singleton(model, db=None):
                 record = model.objects.get()
             else:
                 record = model.objects.using(db).get()
-        except model.MultipleObjectsReturned:
+        except model.MultipleObjectsReturned as mor:
+            log(mor)
             if db is None:
                 records = model.objects.all()
             else:

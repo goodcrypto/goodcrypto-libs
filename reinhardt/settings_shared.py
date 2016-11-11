@@ -1,12 +1,12 @@
 '''
     Shared django settings for between projects.
 
-    Copyright 2009-2015 GoodCrypto
-    Last modified: 2015-09-03
+    Copyright 2009-2016 GoodCrypto
+    Last modified: 2016-11-04
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-
+from __future__ import unicode_literals
 
 import os, sh
 
@@ -56,6 +56,38 @@ LOGIN_REDIRECT_URL = '/'
 # do not allow any pages from our site to be wrapped in frames
 X_FRAME_OPTIONS = 'DENY'
 
+INSTALLED_APPS = (
+    'django.contrib.humanize',
+    'django.contrib.staticfiles',
+
+    # don't include the following apps because they are only used
+    # in our public sites and not goodcrypto's private site
+    #   django.contrib.contenttypes
+    #   django.contrib.sessions
+    #   django.contrib.sites
+    #   django.contrib.messages
+
+    # django third party
+    #'debug_toolbar',
+    'django_singleton_admin',
+
+    # django admin plus bootstrap
+    # https://pypi.python.org/pypi/django-admin-bootstrapped-plus/
+    'admin_bootstrapped_plus',
+    # https://pypi.python.org/pypi/django-admin-bootstrapped/
+    'django_admin_bootstrapped',
+    # https://pypi.python.org/pypi/django-bootstrap3
+    'bootstrap3',
+    # https://pypi.python.org/pypi/django-forms-bootstrap/
+    'django_forms_bootstrap',
+
+    # https://pypi.python.org/pypi/django-assets/
+    'django_assets',
+
+    'django.contrib.admin',
+    'django.contrib.auth',
+)
+
 # List of template loaders that know how to import templates from various sources.
 TEMPLATE_LOADERS = (
     'django.template.loaders.filesystem.Loader',
@@ -101,7 +133,12 @@ try:
     if not os.path.exists(DJANGO_LOG_DIR):
         os.makedirs(DJANGO_LOG_DIR)
 except Exception:
-    DJANGO_LOG_FILENAME = '/tmp/django.log'
+    try:
+        # each log needs a unique name per user or there are permission conflicts
+        DJANGO_LOG_FILENAME = '/tmp/django_{}.log'.format(whoami())
+    except:
+        from tempfile import NamedTemporaryFile
+        DJANGO_LOG_FILENAME = NamedTemporaryFile(mode='a', prefix='django', dir='/tmp')
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

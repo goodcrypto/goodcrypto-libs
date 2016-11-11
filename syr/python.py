@@ -3,13 +3,16 @@
 
     Utiities about python, not just in python.
 
-    Copyright 2009-2014 GoodCrypto
-    Last modified: 2015-10-04
+    Copyright 2009-2016 GoodCrypto
+    Last modified: 2016-06-18
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
-
 from __future__ import print_function
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import importlib, os.path, sh, re, traceback, types
 
@@ -18,15 +21,35 @@ from syr._log import log
 prefered_encoding = 'utf-8'
 
 def set_default_encoding(encoding=prefered_encoding):
+    '''
+        >>> set_default_encoding(prefered_encoding)
+        >>> encoding = sys.getdefaultencoding()
+        >>> if IS_PY2:
+        ...     encoding == 'ascii' or encoding == 'utf-8'
+        ... else:
+        ...     encoding == 'utf-8'
+        True
+    '''
 
-    try:
-        sys.setdefaultencoding(encoding)
-    except AttributeError:
-        '''Already used by the site module, which removes it from sys namespace'''
-        pass
+    if IS_PY2:
+        try:
+            # only available in python2
+            sys.setdefaultencoding(encoding)
+        except AttributeError:
+            '''Already used by the site module, which removes it from sys namespace'''
+            pass
 
 def dynamically_import_module(name):
-    ''' Dynamically import a module. See python docs on __import__()'''
+    '''
+        Dynamically import a module. See python docs on __import__()
+
+        >>> mod = dynamically_import_module('syr')
+        >>> if IS_PY2:
+        ...     str(mod) == "<module 'syr' from '/usr/local/lib/python2.7/dist-packages/syr/__init__.pyc'>"
+        ... else:
+        ...     str(mod) == "<module 'syr' from '/usr/local/lib/python3.4/dist-packages/syr/__init__.py'>"
+        True
+     '''
 
     module = __import__(name)
     components = name.split('.')
@@ -35,6 +58,14 @@ def dynamically_import_module(name):
     return module
 
 def dynamic_import(name):
+    '''
+        >>> mod = dynamic_import('syr')
+        >>> if IS_PY2:
+        ...     str(mod) == "<module 'syr' from '/usr/local/lib/python2.7/dist-packages/syr/__init__.pyc'>"
+        ... else:
+        ...     str(mod) == "<module 'syr' from '/usr/local/lib/python3.4/dist-packages/syr/__init__.py'>"
+        True
+    '''
     # from Python Library Reference, Built-in Functions, __import__
     mod = __import__(name)
     components = name.split('.')
@@ -65,10 +96,17 @@ def print_imported_modules(filename):
     for name in sorted(finder.modules.keys()):
         mod = finder.modules[name]
         print('    {}: '.format(name), end='')
-        print(','.join(sorted(mod.globalnames.keys()[:3])))
+        if IS_PY2:
+            print(','.join(sorted(mod.globalnames.keys()[:3])))
+        else:
+            print(','.join(sorted(list(mod.globalnames.keys())[:3])))
 
     print('Modules not imported:')
-    for name in finder.badmodules.iterkeys():
+    if IS_PY2:
+        keys = finder.badmodules.iterkeys()
+    else:
+        keys = finder.badmodules.keys()
+    for name in keys:
         print('    {}'.format(name))
 
 def object_name(obj, include_repr=False):
@@ -77,6 +115,13 @@ def object_name(obj, include_repr=False):
         The name is not guaranteed to be unique.
 
         If include_repr is True, an instance has its string representation appended.
+
+        >>> name = object_name('syr')
+        >>> if IS_PY2:
+        ...     name == u'__builtin__.unicode instance'
+        ... else:
+        ...     name == 'builtins.str instance'
+        True
     '''
 
     module_name = getattr(obj, '__module__', None)
@@ -106,7 +151,11 @@ def caller_module_name(ignore=None, syr_utils_valid=False):
 
         >>> # this code really needs to be tested from a different module
         >>> name = caller_module_name(syr_utils_valid=True)
-        >>> assert name == 'syr.utils' or name == 'utils' or name == 'nosetests', 'unexpected '+name
+        >>> if IS_PY2:
+        ...     name == u'python'
+        ... else:
+        ...     name == 'python'
+        True
 
         To get the parent caller instead of the module that actually
         calls caller_module_name():
@@ -198,23 +247,48 @@ def caller_module_name(ignore=None, syr_utils_valid=False):
     return name
 
 def is_package_type(object):
-    ''' Returns True if object is a python package, else False. '''
+    '''
+        Returns True if object is a python package, else False.
+
+        >>> import syr
+        >>> is_package_type(syr)
+        True
+        >>> import syr.python
+        >>> is_package_type(syr.python)
+        False
+    '''
 
     # this seems to be roughly what python does internally
     return (is_module_type(object) and
-        (os.path.basename(object.__file__).endswith('__init__.pyc') or
-            os.path.basename(object.__file__).endswith('__init__.pyo')))
+        (os.path.basename(object.__file__).endswith('__init__.py') or
+         os.path.basename(object.__file__).endswith('__init__.pyc') or
+         os.path.basename(object.__file__).endswith('__init__.pyo')))
 
 def is_module_type(object):
     ''' Returns True if object is a python module, else False.
 
         Convenience function for symmetry with is_package_type().
+
+        >>> import syr
+        >>> is_module_type(syr)
+        True
+        >>> import syr.python
+        >>> is_module_type(syr.python)
+        True
     '''
 
     return isinstance(object, types.ModuleType)
 
 def is_instance(obj, cls):
-    ''' More reliable version of python builtin isinstance() '''
+    '''
+        More reliable version of python builtin isinstance()
+
+        >>> if IS_PY2:
+        ...     is_instance('syr', unicode)
+        ... else:
+        ...     is_instance('syr', str)
+        True
+    '''
 
     log('is_instance(obj={}, cls={})'.format(obj, cls))
     log('is_instance() type: obj={}, cls={}'.format(type(obj), type(cls)))
@@ -286,29 +360,62 @@ def is_class_instance(obj):
 
         >>> # test assumptions and python imlementation details
 
-        >>> type(2)
-        <type 'int'>
-        >>> type([])
-        <type 'list'>
-        >>> type({})
-        <type 'dict'>
+        >>> t = type(2)
+        >>> if IS_PY2:
+        ...     str(t) == "<type 'int'>"
+        ... else:
+        ...     str(t) == "<class 'int'>"
+        True
+        >>> t = type([])
+        >>> if IS_PY2:
+        ...     str(t) == "<type 'list'>"
+        ... else:
+        ...     str(t) == "<class 'list'>"
+        True
+        >>> t = type({})
+        >>> if IS_PY2:
+        ...     str(t) == "<type 'dict'>"
+        ... else:
+        ...     str(t) == "<class 'dict'>"
+        True
 
         >>> cls = getattr(2, '__class__')
-        >>> cls
-        <type 'int'>
+        >>> if IS_PY2:
+        ...     str(cls) == "<type 'int'>"
+        ... else:
+        ...     str(cls) == "<class 'int'>"
+        True
         >>> superclass = getattr(cls, '__class__')
-        >>> superclass
-        <type 'type'>
+        >>> if IS_PY2:
+        ...     str(superclass) == "<type 'type'>"
+        ... else:
+        ...     str(superclass) == "<class 'type'>"
+        True
 
-        >>> str(type(datetime.date))
-        "<type 'type'>"
-        >>> str(type(c_style_class_instance))
-        "<type 'datetime.date'>"
-        >>> repr(datetime.date)
-        "<type 'datetime.date'>"
+        >>> t = str(type(datetime.date))
+        >>> if IS_PY2:
+        ...     t == "<type 'type'>"
+        ... else:
+        ...     t == "<class 'type'>"
+        True
+        >>> t = str(type(c_style_class_instance))
+        >>> if IS_PY2:
+        ...     t == "<type 'datetime.date'>"
+        ... else:
+        ...     t == "<class 'datetime.date'>"
+        True
+        >>> t = repr(datetime.date)
+        >>> if IS_PY2:
+        ...     t == "<type 'datetime.date'>"
+        ... else:
+        ...     t == "<class 'datetime.date'>"
+        True
         >>> repr(c_style_class_instance)
         'datetime.date(2000, 12, 1)'
-        >>> isinstance(c_style_class_instance, types.InstanceType)
+        >>> if IS_PY2:
+        ...     isinstance(c_style_class_instance, types.InstanceType)
+        ... else:
+        ...     isinstance(c_style_class_instance, types.MethodType)
         False
         >>> hasattr(c_style_class_instance, '__class__')
         True
@@ -322,14 +429,24 @@ def is_class_instance(obj):
         >>> hasattr(cls, '__slots__')
         False
         >>> cls = getattr(c_style_class_instance, '__class__')
-        >>> cls
-        <type 'datetime.date'>
+        >>> if IS_PY2:
+        ...     str(cls) == "<type 'datetime.date'>"
+        ... else:
+        ...     str(cls) == "<class 'datetime.date'>"
+        True
         >>> superclass = getattr(cls, '__class__')
-        >>> superclass
-        <type 'type'>
+        >>> if IS_PY2:
+        ...     str(superclass) == "<type 'type'>"
+        ... else:
+        ...     str(superclass) == "<class 'type'>"
+        True
 
-        >>> '__dict__' in dir(old_c)
-        False
+        >>> ok = '__dict__' in dir(old_c)
+        >>> if IS_PY2:
+        ...    ok == False
+        ... else:
+        ...    ok == True
+        True
         >>> hasattr(old_c, '__slots__')
         False
 
@@ -342,22 +459,41 @@ def is_class_instance(obj):
 
     type_str = str(type(obj))
 
-    # old style python defined classes
-    if type_str == "<type 'instance'>":
-            is_instance = True
-
-    # C defined classes
-    elif type_str.startswith('<type '):
-        # base types don't have a dot
-        is_instance =  '.' in type_str
-
-    # new style python defined classes
-    elif type_str.startswith('<'):
-        # if it has an address, it's an instance, not a class
-        is_instance =  ' 0x' in repr(obj)
+    if IS_PY2:
+        # old style python defined classes
+        if type_str == "<type 'instance'>":
+                is_instance = True
+    
+        # C defined classes
+        elif type_str.startswith('<type '):
+            # base types don't have a dot
+            is_instance =  '.' in type_str
+    
+        # new style python defined classes
+        elif type_str.startswith('<'):
+            # if it has an address, it's an instance, not a class
+            is_instance =  ' 0x' in repr(obj)
+    
+        else:
+            is_instance = False
 
     else:
-        is_instance = False
+        # old style python defined classes
+        if type_str == "<class 'instance'>":
+                is_instance = True
+    
+        # C defined classes
+        elif type_str.startswith('<class '):
+            # base types don't have a dot
+            is_instance =  '.' in type_str
+    
+        # new style python defined classes
+        elif type_str.startswith('<'):
+            # if it has an address, it's an instance, not a class
+            is_instance =  ' 0x' in repr(obj)
+    
+        else:
+            is_instance = False
 
     return is_instance
 
@@ -378,7 +514,12 @@ def is_class_instance(obj):
     """
 
 def run(sourcecode):
-    ''' Run source code text. '''
+    '''
+        Run source code text.
+
+        >>> run('print("hi")')
+        hi
+    '''
 
     # magic. bad. but wasted too many hours trying pythonic solutions
     # in python 2.7 importlib doesn't know spec.Specs is the same as dbuild.spec.Specs
@@ -395,26 +536,50 @@ def run(sourcecode):
         exec_file.write(sourcecode)
 
     try:
-        execfile(exec_path, globals())
+        if IS_PY2:
+            execfile(exec_path, globals())
+        else:
+            exec(compile(open(exec_path).read(), exec_path, 'exec'), globals())
     finally:
         os.remove(exec_path)
 
 def import_module(name):
-    ''' Import with debugging '''
+    '''
+        Import with debugging
+
+        >>> module = import_module("syr.user")
+        >>> if IS_PY2:
+        ...     str(module) == "<module 'syr.user' from '/usr/local/lib/python2.7/dist-packages/syr/user.pyc'>"
+        ... else:
+        ...     str(module) == "<module 'syr.user' from '/usr/local/lib/python3.4/dist-packages/syr/user.py'>"
+        True
+    '''
 
     try:
+        log('import_module({})'.format(name)) #DEBUG
         module = importlib.import_module(name)
+        log('import_module() result: {}'.format(module)) #DEBUG
     except ImportError as imp_error:
+        log('unable to import {}'.format(name))
         log('ImportError: ' + str(imp_error))
         msg = 'could not import {}'.format(name)
         log(msg)
         # find out why
-        log(sh.python('-c', 'import {}'.format(name)).stderr)
+        if IS_PY2:
+            log(sh.python('-c', 'import {}'.format(name)).stderr)
+        else:
+            log(sh.python3('-c', 'import {}'.format(name)).stderr)
         raise BuildException(msg)
     return module
 
 def stacktrace():
-    'Returns a printable stacktrace.'
+    '''
+        Returns a printable stacktrace.
+
+        >>> t = stacktrace()
+        >>> t.startswith('Traceback')
+        True
+    '''
 
     stack = traceback.extract_stack()[:-1]
     lines = traceback.format_list(stack)
@@ -447,7 +612,7 @@ def get_module(name):
         The module name is available within a module as __name__.
 
         >>> get_module(__name__) # doctest: +ELLIPSIS
-        <module '...' from '...utils.py...'>
+        <module '...' from 'python.py...'>
     '''
 
     return sys.modules[name]
@@ -490,6 +655,62 @@ def format_exception(exc):
         # the exc Exception is not the most recent, so no traceback
         self.debug('log.debug() called with an exception but no traceback available')
         exc = traceback.format_exception_only(type(exc), exc)
+
+def is_string(obj):
+    '''
+        Return True iff obj is a string.
+
+        >>> is_string('test')
+        True
+    '''
+
+    if IS_PY2:
+        return isinstance(obj, basestring)
+    else:
+        return isinstance(obj, str)
+
+def is_list(obj):
+    '''
+        Return True iff obj is a list.
+
+        >>> is_list([])
+        True
+    '''
+
+    if IS_PY2:
+        return type(obj) is types.ListType
+    else:
+        log(type(obj))
+        return isinstance(obj, list)
+
+
+def is_tuple(obj):
+    '''
+        Return True iff obj is a tuple.
+
+        >>> is_string('test')
+        True
+    '''
+
+    if IS_PY2:
+        return type(obj) is types.TupleType
+    else:
+        return isinstance(obj, tuple)
+
+def is_dict(obj):
+    '''
+        Return True iff obj is a dictionary.
+
+        >>> is_string('test')
+        True
+    '''
+
+    if IS_PY2:
+        return type(obj) is types.DictType
+    else:
+        return isinstance(obj, dict)
+
+
 
 if __name__ == "__main__":
     import doctest

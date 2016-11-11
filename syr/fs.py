@@ -1,24 +1,30 @@
 '''
     File system.
 
-    Copyright 2008-2015 GoodCrypto
-    Last modified: 2015-12-02
+    Copyright 2008-2016 GoodCrypto
+    Last modified: 2016-05-27
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import os, os.path, pwd, sh, shutil, stat, tempfile, threading
 from contextlib import contextmanager
 from datetime import datetime
 
 from syr.log import get_log
+from syr.python import is_string
 
 log = get_log()
 
 empty_dir = None
 
-DEFAULT_PERMISSIONS_DIR_OCTAL = 0755
-DEFAULT_PERMISSIONS_FILE_OCTAL = 0640
+DEFAULT_PERMISSIONS_DIR_OCTAL = 0o755
+DEFAULT_PERMISSIONS_FILE_OCTAL = 0o640
+
 # use strings with chmod command, sh.chmod(), and syr.fs.chmod()
 DEFAULT_PERMISSIONS_DIR = 'u=rwX,g=rX,o=rX'
 DEFAULT_PERMISSIONS_FILE = 'u=rw,g=r,o='
@@ -78,7 +84,7 @@ def chmod(mode, path, recursive=False):
     # arg order used to be chmod(path, mode, ...), so check types
     # delete this assert if no assertion errors 2015-01-01
     # after we remove this assert, mode can be a string
-    assert isinstance(path, str)
+    assert is_string(path)
 
     if isinstance(mode, int):
         # chmod wants an octal int, not decimal
@@ -312,9 +318,9 @@ def mounted_devices():
         for device, mountpoint, vfstype, options in mounts()]
 
 def unmounted_block_devices():
-    ''' Return list of unmounted devices that may have filesystems, 
+    ''' Return list of unmounted devices that may have filesystems,
         i.e. unmounted block devices. '''
-        
+
     unmounted = []
     mounted = mounted_devices()
     for device in devices():
@@ -325,7 +331,7 @@ def unmounted_block_devices():
                 dev_mounted = True
         if not dev_mounted:
             unmounted.append(device)
-            
+
     return unmounted
 
 def mountpoints():
@@ -422,14 +428,17 @@ def mounted_on(path):
         if mounted_device is not None:
             if path == mountpoint:
                 mounted_device = device
-                
+
     return mounted_device
-        
+
 def devices():
     ''' Return list of devices that may have filesystems. '''
-    
+
     # block devices may have filesystems
-    raw_output = sh.lsblk('--noheadings', '--list', '--paths', '--output=NAME').stdout
+    if IS_PY2:
+        raw_output = sh.lsblk('--noheadings', '--list', '--paths', '--output=NAME').stdout
+    else:
+        raw_output = sh.lsblk('--noheadings', '--list', '--paths', '--output=NAME').stdout.decode()
     devices = raw_output.strip().split('\n')
     return devices
 
@@ -617,8 +626,8 @@ def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, grou
     ''' Merge source to dest dir.
 
         Like shutil.copytree(), but merges with existing dest dir.
-        Unlike shutil.copytree(), symlinks and force default to True. 
-        This behavior is compatible with syr.fs.copy(), and seems to 
+        Unlike shutil.copytree(), symlinks and force default to True.
+        This behavior is compatible with syr.fs.copy(), and seems to
         almost always be what we want.
 
         Set ownership and permissions from keywords, or if None copy from
@@ -627,7 +636,7 @@ def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, grou
 
     ''' Largely copied from http://code.activestate.com/lists/python-list/191783/
         which in turn is largely copied from shutil.copytree(). '''
-        
+
     def remove_dest(destname):
         if os.path.lexists(destname) and force:
             log.debug('removing {}'.format(destname))
@@ -663,7 +672,7 @@ def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, grou
                     # log.debug('merge() symlink({}, {})'.format(linkto, destname)) #DEBUG
                     remove_dest(destname)
                     os.symlink(linkto, destname)
-                    
+
                 elif os.path.isdir(sourcename):
                     if not os.path.isdir(destname):
                         mode = getmode(sourcename)
@@ -672,7 +681,7 @@ def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, grou
                     merge(sourcename, destname,
                         symlinks=symlinks, ignore=ignore, force=force,
                         owner=owner, group=group, perms=perms)
-                        
+
                 else:
                     # log.debug('merge() copy2({}, {})'.format(sourcename, destname)) #DEBUG
                     remove_dest(destname)
@@ -684,18 +693,18 @@ def merge(source, dest, symlinks=True, force=True, ignore=None, owner=None, grou
                     chmod(mode, destname)
                 # XXX What about devices, sockets etc.?
 
-            except (IOError, os.error), why:
+            except (IOError, os.error) as why:
                 log.debug('could not merge: {}'.format(name))
                 errors.append((sourcename, destname, str(why)))
 
             # catch the shutil.Error from the recursive merge so that we can
             # continue with other files
-            except shutil.Error, err:
+            except shutil.Error as err:
                 log.debug('could not merge: {}'.format(name))
                 errors.extend((sourcename, destname, err.args[0]))
 
     if errors:
-        raise shutil.Error, errors
+        raise shutil.Error(errors)
 
 def move(source, dest, owner=None, group=None, perms=None):
     ''' Move source to dest.
@@ -991,8 +1000,8 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
 
     # sometimes replace_strings() gets a type error
     for old, new in replacements.items():
-        assert isinstance(old, str), 'replacement old "{}" should be string but is type {}'.format(old, type(old))
-        assert isinstance(new, str), 'replacement new "{}" should be string but is type {}'.format(new, type(new))
+        assert is_string(old), 'replacement old "{}" should be string but is type {}'.format(old, type(old))
+        assert is_string(new), 'replacement new "{}" should be string but is type {}'.format(new, type(new))
 
     # read text
     mode = os.stat(filename).st_mode
@@ -1003,7 +1012,7 @@ def edit_file_in_place(filename, replacements, regexp=False, lines=False):
         newtext = []
         for line in text.split('\n'):
             # sometimes replace_strings() gets a type error
-            assert isinstance(line, str), 'line should be string but is {}'.format(type(line))
+            assert is_string(line), 'line should be string but is {}'.format(type(line))
             newline = syr.utils.replace_strings(line, replacements, regexp)
             newtext.append(newline)
         text = '\n'.join(newtext)

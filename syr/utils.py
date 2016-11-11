@@ -5,26 +5,37 @@
     For example, many could go in syr.debug or syr.fs.
     But you need time to find and change the callers.
 
-    Copyright 2009-2015 GoodCrypto
-    Last modified: 2015-10-13
+    Copyright 2009-2016 GoodCrypto
+    Last modified: 2016-10-18
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import print_function
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
 from functools import wraps
 from glob import glob
-from cStringIO import StringIO
 import bz2, calendar, os, os.path, re, sh, string, sys, tempfile, types, zipfile
 import gzip as gz
 import threading, trace, traceback
-import re, time, types, unicodedata, urlparse
+import re, time, types, unicodedata
 
-from syr.python import object_name
-from syr.times import timedelta_to_human_readable
+if IS_PY2:
+    from cStringIO import StringIO
+    from urlparse import urljoin, urlparse
+else:
+    from io import StringIO
+    from urllib.parse import urljoin, urlparse
+
 from syr.lock import locked
+from syr.python import is_string, object_name
+from syr.times import timedelta_to_human_readable
 
 # we can't use syr.log here because syr.log uses this module
 _debug = False
@@ -72,7 +83,8 @@ def get_scheme_netloc(url):
         ('https', 'test:8211')
     '''
 
-    parsed_url = urlparse.urlparse(url)
+    parsed_url = urlparse(url)
+
     try:
         scheme = parsed_url.scheme
         netloc = parsed_url.netloc
@@ -81,7 +93,6 @@ def get_scheme_netloc(url):
         netloc = parsed_url[1]
 
     return (scheme, netloc)
-
 
 def get_remote_ip(request):
     '''Get the remote ip. If there is a forwarder, assume the first IP
@@ -159,7 +170,7 @@ def get_absolute_url(url, home_url, request=None):
     except:
         pass
 
-    return urlparse.urljoin(final_home_url, url)
+    return urljoin(final_home_url, url)
 
 def say(message):
     ''' Speak a message.
@@ -252,7 +263,7 @@ def generate_password(max_length=25, punctuation_chars='-_ .,!+?$#'):
     while len(password) < max_length:
         new_char = os.urandom(1)
         try:
-            new_char.decode('utf-8')
+            new_char = new_char.decode()
             # the character must be a printable character
             if ((new_char >= 'A' and new_char <= 'Z') or
                 (new_char >= 'a' and new_char <= 'z') or
@@ -334,7 +345,10 @@ def clean_pathname(pathname):
             removed. Doesn't avoid possible disallowed pathnames."
     '''
 
-    ascii_pathname = unicodedata.normalize('NFKD', unicode(pathname)).encode('ASCII', 'ignore')
+    if IS_PY2:
+        ascii_pathname = unicodedata.normalize('NFKD', unicode(pathname)).encode('ASCII', 'ignore')
+    else:
+        ascii_pathname = unicodedata.normalize('NFKD', pathname.decode()).encode('ASCII', 'ignore')
     return ''.join(c for c in ascii_pathname if c in valid_pathname_chars)
 
 
@@ -343,12 +357,15 @@ def strip_input(data):
 
     try:
         if data is not None:
-            if isinstance(data, basestring) or isinstance(data, CharField):
+            if is_string(data) or isinstance(data, CharField):
                 data = data.strip()
 
             elif isinstance(data, EmailField):
-                data = '%s' % data
+                data = '{}'.format(data)
                 data = data.strip()
+                
+            elif isinstance(data, bytes):
+                data = data.decode().strip()
     except:
         log(traceback.format_exc())
 
@@ -372,8 +389,8 @@ def trace_func(frame, event, arg):
             http://stackoverflow.com/questions/2663841/python-tracing-a-segmentation-fault
 
         >>> def test():
-        ...     print "Line 8"
-        ...     print "Line 9"
+        ...     print("Line 8")
+        ...     print("Line 9")
         >>> import sys
         >>> old_trace = sys.gettrace()
         >>> # NOT WORKING - sys.settrace(trace_func)
@@ -438,6 +455,11 @@ def rtrim(string, suffix):
 
 def trim(string, xfix):
     ''' Trim all prefixes or suffixes of xfix from string. '''
+
+    if is_string(string):
+        string = string.encode()
+    if is_string(xfix):
+        xfix = xfix.encode()
 
     length = len(xfix)
     while string.startswith(xfix):
@@ -696,7 +718,7 @@ def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=Fal
     def report_failure(why):
         if not quiet:
             message = 'command "%s" failed: %s' % (command, why)
-            print >> sys.stderr, message
+            print(message, file=sys.stderr)
             log(message)
 
     raise Exception('Deprecated. Use the sh module.')
@@ -707,7 +729,7 @@ def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=Fal
         verbose = False
 
     if verbose and not quiet:
-        print command
+        print(command)
 
     process = subprocess.Popen(
         command,
@@ -720,10 +742,10 @@ def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=Fal
     if not no_stdout:
         if stdout:
             stdout = stdout.rstrip()
-            print stdout
+            print(stdout)
         if stderr:
             stderr = stderr.rstrip()
-            print stderr
+            print(stderr)
 
     # a return code of zero is success in linux, anything else is failure
     if process.returncode:
@@ -731,12 +753,12 @@ def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=Fal
         report_failure(msg)
         success = False
         if raise_exception:
-            raise RunFailed, msg
+            raise RunFailed(msg)
 
     elif stderr:
         success = False
         if raise_exception:
-            raise RunFailed, 'stderr: %s' % stderr.rstrip()
+            raise RunFailed('stderr: %s' % stderr.rstrip())
 
     elif expected_output and not (
         stdout and stdout.endswith(expected_output)):
@@ -744,7 +766,7 @@ def run(command, expected_output=None, verbose=False, quiet=False, no_stdout=Fal
         report_failure(msg)
         success = False
         if raise_exception:
-            raise RunFailed, msg
+            raise RunFailed(msg)
 
     else:
         success = True
@@ -810,7 +832,7 @@ def get_command_output(command, quiet=False):
 
     if stderr and not quiet:
         stderr = stderr.rstrip()
-        print >> sys.stderr, stderr
+        print(stderr, file=sys.stderr)
 
     return stdout
 
@@ -830,7 +852,7 @@ def delete_empty_files(directory):
         >>> assert os.path.exists(filename2)
 
         >>> with open(filename2, 'w') as f2:
-        ...     f2.write('data')
+        ...     len = f2.write('data')
 
         >>> delete_empty_files(directory)
         >>> assert not os.path.exists(filename1)
@@ -867,13 +889,27 @@ def randint(min=None, max=None):
 
     import sys, random
 
+    if IS_PY2:
+        maxsize = sys.maxint
+    else:
+        maxsize = sys.maxsize
+
     if min is None:
-        min = -(sys.maxint-1)
+        min = -(maxsize-1)
     if max is None:
-        max = sys.maxint
+        max = maxsize
 
     return random.randint(min, max)
 
+def strip_youtube_hash(filename):
+    if '.' in filename:
+        rootname, _, extension = filename.rpartition('.')
+        youtube_match = re.match(r'(.*)-[a-zA-Z0-9\-_]{11}$', rootname)
+        if youtube_match:
+            cleanroot = youtube_match.group(1)
+            filename = cleanroot + '.' + extension
+    return filename
+    
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

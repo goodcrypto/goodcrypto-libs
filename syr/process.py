@@ -4,22 +4,31 @@
     We prefer the sh module over python standard modules because linux
     command line programs are more likely to have been thoroughly vetted.
 
-    Copyright 2013-2015 GoodCrypto
-    Last modified: 2015-11-18
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-05-24
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
 
-import datetime, os, sh, signal, subprocess, thread, threading, time
+import sys
+IS_PY2 = sys.version_info[0] == 2
+
+if IS_PY2:
+    import thread
+else:
+    import _thread
+
+import datetime, os, sh, signal, subprocess, threading, time
 from contextlib import contextmanager
 from traceback import format_exc
 
+from syr.log import get_log
 import syr.python, syr.times
-
-from log import get_log
-import user
+import syr.user
 
 log = get_log()
+DEBUGGING = False
 
 class TimedOutException(Exception):
     ''' Operation timed out exception. '''
@@ -61,7 +70,10 @@ def pids_from_program(program):
     '''
 
     try:
-        pid_strings = sh.pidof(program).stdout.strip().split()
+        if IS_PY2:
+            pid_strings = sh.pidof(program).stdout.strip().split()
+        else:
+            pid_strings = sh.pidof(program).stdout.decode().strip().split()
     except sh.ErrorReturnCode_1:
         pids = []
     else:
@@ -124,7 +136,10 @@ def programs_using_file(path):
                 log.debug('no program from pid  {}'.format(pid))
 
     # lsof
-    lines = sh.lsof().stdout.strip().split('\n')
+    if IS_PY2:
+        lines = sh.lsof().stdout.strip().split('\n')
+    else:
+        lines = sh.lsof().stdout.decode().strip().split('\n')
     for line in lines:
         fields = line.split()
         command = fields[0]
@@ -154,7 +169,8 @@ def is_program_running(search_string):
     def capture_output(line):
         output.append(line)
 
-    log.debug('is_program_running() searchstring: {}'.format(search_string))
+    if DEBUGGING:
+        log.debug('is_program_running() searchstring: {}'.format(search_string))
 
     try:
         output = []
@@ -165,31 +181,41 @@ def is_program_running(search_string):
         running = False
         log.debug(format_exc())
     else:
+        if IS_PY2:
+            stdout = psgrep_result.stdout
+        else:
+            stdout = psgrep_result.stdout.decode()
         running = (
             (psgrep_result.exit_code == 0) and
-            (psgrep_result.stdout != '') and
-            (search_string in psgrep_result.stdout))
+            (stdout != '') and
+            (search_string in stdout))
 
     if not running:
         try:
             ps_result = sh.ps('-eo', 'pid,args', _out=capture_output)
+            if IS_PY2:
+                stdout = ps_result.stdout
+            else:
+                stdout = ps_result.stdout.decode()
             running = (
                 (ps_result.exit_code == 0) and
-                (ps_result.stdout != '') and
-                (search_string in ps_result.stdout))
+                (stdout != '') and
+                (search_string in stdout))
             if running:
-                log.debug('exit code: {}'.format(ps_result.exit_code))
-                #log.debug('stdout: {}'.format(ps_result.stdout))
+                if DEBUGGING:
+                    log.debug('exit code: {}'.format(ps_result.exit_code))
+                    #log.debug('stdout: {}'.format(ps_result.stdout))
             else:
                 running = search_string in output
-                if not running:
+                if not running and DEBUGGING:
                     log.debug('output: {}'.format(output))
         except:
             log.debug(format_exc())
         else:
             pass
 
-    log.debug('{} is_program_running: {}'.format(search_string, running))
+    if DEBUGGING:
+        log.debug('{} is_program_running: {}'.format(search_string, running))
 
     return running
 
@@ -198,7 +224,7 @@ def pids_from_fuser(*args):
 
         Returns Empty list if none. '''
 
-    user.require_user('root') # fuser requires root
+    syr.user.require_user('root') # fuser requires root
 
     log.debug('pids_from_fuser(*args) args: {}'.format(repr(args)))
     try:
@@ -219,7 +245,10 @@ def pids_from_fuser(*args):
     else:
         log.debug('pids_from_fuser() fuser_out: {}'.format(repr(fuser_out)))
         # only the pids g to stdout
-        pid_strings = fuser_out.stdout.strip().split()
+        if IS_PY2:
+            pid_strings = fuser_out.stdout.strip().split()
+        else:
+            pid_strings = fuser_out.stdout.decode().strip().split()
         pids = [int(pid) for pid in pid_strings]
 
     log.debug('pids_from_fuser() pid: {}'.format(pids))
@@ -359,8 +388,12 @@ def stop_all_threads():
 
     for thread in threading.enumerate():
         try:
-            if not thread.daemon:
-                thread.exit()
+            if IS_PY2:
+                if not thread.daemon:
+                    thread.exit()
+            else:
+                if not _thread.daemon:
+                    _thread.exit()
         except:
             # this thread would die anyway as we exit the program, so be quiet
             pass
@@ -418,16 +451,16 @@ def call(*args, **kwargs):
             raise
 
     return result
-    
+
 def _UNUSED_start(command, user=None, *args):
     ''' Start a program. '''
-    
-    ''' It can be very hard to start a program from python, especially as 
-        another user. Here is a collection of possible ways. 
-        
-        The ones that use sudo should be skipped if the current user is 
+
+    ''' It can be very hard to start a program from python, especially as
+        another user. Here is a collection of possible ways.
+
+        The ones that use sudo should be skipped if the current user is
         the target user.
-        
+
         The best solution so far for "sudo -u USER PROGRAM" is syr.user.force().
     '''
 
@@ -442,8 +475,8 @@ def _UNUSED_start(command, user=None, *args):
             time.sleep(1)
             wait = wait + 1
         log('web server started in {} seconds: {}'.format(wait, is_program_running(WEB_FILTERS_PROGRAM)))
-    
-    SRC_DIR = '/usr/local/src'    
+
+    SRC_DIR = '/usr/local/src'
     WEB_FILTERS_PROGRAM = 'web/filters.py'
     WEB_FILTERS_PATH = os.path.join(SRC_DIR, WEB_FILTERS_PROGRAM)
     FILTER_STARTUP_TIME = 5 # secs to start, and for any early exceptions to happen
@@ -492,17 +525,17 @@ def _UNUSED_start(command, user=None, *args):
         log('web app not running. start in foreground of child process')
         if os.fork() == 0:
             with fork_child():
-                import goodcrypto.web.filters
-                goodcrypto.web.filters.main()
+                import goodcrypto.webfirewall.filters
+                goodcrypto.webfirewall.filters.main()
         time.sleep(FILTER_STARTUP_TIME)
 
     # wait_for_web_proxy()
     assert is_program_running(WEB_FILTERS_PROGRAM), '{} not running'.format(WEB_FILTERS_PROGRAM)
 
     log('web proxy started')
-    
+
     """
-    
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

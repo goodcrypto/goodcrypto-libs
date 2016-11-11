@@ -1,11 +1,13 @@
 '''
     OS identification.
 
-    Copyright 2008-2014 GoodCrypto
-    Last modified: 2014-07-17
+    Copyright 2008-2016 GoodCrypto
+    Last modified: 2016-04-23
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
 
 import platform
 
@@ -86,4 +88,4 @@ def is_mac():
     ''' Return True if the underlying OS is any variant of Mac. '''
     osname = get_os_name()
     return osname.find("mac os") >= 0 or osname.find("macos") >= 0
-    
+

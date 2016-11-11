@@ -1,13 +1,13 @@
 {% comment %}
 
     Reinhardt site css.
-    
+
     The order of these CSS elements is significant.
     We want later stylesheets to override earlier ones.
-    
-    Copyright 2013-2015 GoodCrypto
-    Last modified: 2015-02-06
-        
+
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-11-08
+
 {% endcomment %}
 {% load custom %}
 
@@ -15,29 +15,8 @@
         <link rel="icon" type="/image/x-icon" href="/favicon.ico" />
         <style type="text/css" media="screen">
             {% include 'static/css/reinhardt.bootstrap.css' %}
-            {% include 'static/css/bootstrap.min.css' %}
+            {% include 'static/bootstrap/css/bootstrap.min.css' %}
+            {% include 'static/css/reinhardt.bootstrap.css' %}
         </style>
-        {# <link rel="stylesheet" href="{% static 'css/reinhardt.bootstrap.css' %}" type="text/css" media="screen"/> #}
-        {# <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}" type="text/css" media="screen"/> #}
     {% endif %}
 
-{% comment %}
-    This css is already included in some of our other bootstrap.css, which is bundled into bootstrap.min.css.
-    But this css doesn't take effect there. It works here.
-{% endcomment %}
-<style type="text/css" media="screen">    
-/* Remove abbr dotted underline */
-abbr[title] {
-    border-bottom: none;
-    text-decoration: none;
-}
-/* Bootstrap .collapse conflicts with django admin .collapse */
-.collapse {
-    height:auto;
-    /*
-    overflow:hidden;
-    position:relative;
-    */
-}
-   
-</style>

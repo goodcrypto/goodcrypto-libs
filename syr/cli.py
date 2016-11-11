@@ -4,28 +4,41 @@
     A wrapper for the sh module.
     The Responder class responds to prompts from programs.
     The Commands class issues multiple commands at the command prompt.
+    
+    WARNING: All inputs to the cli module must be sanitised for security.
 
-    Copyright 2013-2014 GoodCrypto
-    Last modified: 2015-10-18
+    Copyright 2013-2016 GoodCrypto
+    Last modified: 2016-07-07
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
 
 from __future__ import print_function
+from __future__ import unicode_literals
 
-# delete in python 3
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+IS_PY2 = sys.version_info[0] == 2
 
-from abc import ABCMeta, abstractmethod
+if IS_PY2:
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
+else:
+    import collections
+
+from abc import abstractmethod
 import os, re, sh, sys, traceback
 from threading import Timer
 
-import syr.python
-from format import pretty
-from lock import locked
-import log, times
+from syr.format import pretty
+from syr.lock import locked
+from syr import log
+from syr.python import stacktrace
+
+if IS_PY2:
+    from syr.abstract_python2_class import AbstractPythonClass
+else:
+    from syr.abstract_python3_class import AbstractPythonClass
+
 
 log = log.get_log()
 
@@ -39,13 +52,11 @@ class StderrException(Exception):
     def __init__(self, sh_result):
         self.sh_result = sh_result
 
-class AbstractCli(object):
+class AbstractCli(AbstractPythonClass):
     ''' Run a command line interface program with responses. '''
 
     PRINT_LOG = False
     DEFAULT_MAX_TIME_TO_RECEIVE_LINE = 60 # seconds
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, *args, **kwargs):
         self._clilog = None
@@ -256,7 +267,7 @@ class Responder(AbstractCli):
             log.warning("'responses' passed as dict is strongly deprecated")
             log.warning('stack including deprecated code:\n{}'.
                 # format_stack() returns a list with newlines already added
-                format(syr.python.stacktrace()))
+                format(stacktrace()))
             new_responses = []
             for prompt in responses:
                 new_responses.append((prompt, responses[prompt]))
@@ -337,11 +348,16 @@ class Responder(AbstractCli):
                             format(prompt, self.line_buffer))
                         self.flush_buffer()
 
-                        if callable(response):
-                            log.debug('get response to prompt "{}" from callable'.
-                                format(prompt))
-                            log.debug('call {}'.format(repr(response)))
-                            response = response(prompt)
+                        if IS_PY2:
+                            if callable(response):
+                                log.debug('get response to prompt "{}" from callable'.format(prompt))
+                                log.debug('call {}'.format(repr(response)))
+                                response = response(prompt)
+                        else:
+                            if isinstance(response, collections.Callable):
+                                log.debug('get response to prompt "{}" from callable'.format(prompt))
+                                log.debug('call {}'.format(repr(response)))
+                                response = response(prompt)
 
                         if response is None:
                             log.debug('ignore prompt "{}"'.format(prompt))
@@ -509,7 +525,11 @@ def run(sh_function, *args, **kwargs):
     try:
         result = sh_function(*args, **kwargs)
         if not _stderr_ok:
-            if result.stderr.strip():
+            if IS_PY2:
+                result_stderr = result.stderr
+            else:
+                result_stderr = result.stderr.decode()
+            if result_stderr.strip():
                 raise StderrException(result)
 
     except sh.ErrorReturnCode as erc:

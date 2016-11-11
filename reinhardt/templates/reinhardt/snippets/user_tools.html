@@ -1,26 +1,24 @@
 {% comment %}
 
     Shared user signin/signout for navbar.
-    
-    Copyright (c) 2013-2015 GoodCrypto
-    Last modified: 2015-02-22
+
+    Copyright (c) 2013-2016 GoodCrypto
+    Last modified: 2016-11-03
 
 {% endcomment %}
 
 {% load i18n %}
     {% if user.is_active and user.is_staff %}
       <ul class="nav navbar-nav navbar-right">
+        {% if user.is_authenticated and user.is_active %}
             {% if user.is_superuser %}
-                <li title=""><a href="/admin/password_change/" class="navbar-link">{% trans 'Change password' %}</a></li>
-                &nbsp;&nbsp;
+            <li title="">
+                <a href="/admin/password_change/" class="navbar-link">{% trans 'Change password' %}</a>
+            </li>
             {% endif %}
-            {% url 'admin:logout' as logout_url %}
-            {% if logout_url %}
-                <li title=""><a href="{{ logout_url }}" class="navbar-link">
-            {% else %}
-                <li title=""><a href="/accounts/logout/?next=/" class="navbar-link">
-            {% endif %}
-            {% trans 'Sign out' %}</a></li>
-        </div>
+            <li title="">
+                <a href="/signout/" class="navbar-link">{% trans 'Sign out' %}</a>
+            </li>
+        {% endif %}
     {% endif %}
 

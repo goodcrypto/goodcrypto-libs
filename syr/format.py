@@ -5,15 +5,18 @@
     imports that are not from standard libs should not be
     at global scope. Put the import where it's used.
 
-    Copyright 2008-2013 GoodCrypto
-    Last modified: 2015-09-24
+    Copyright 2008-2016 GoodCrypto
+    Last modified: 2016-05-01
 
     This file is open source, licensed under GPLv3 <http://www.gnu.org/licenses/>.
 '''
+from __future__ import unicode_literals
+
+import sys
+IS_PY2 = sys.version_info[0] == 2
 
 import datetime, json, pprint
 from traceback import format_exc
-
 
 # try to import an html prettyprinter
 try:
@@ -62,7 +65,7 @@ def pretty(object, indent=0, base_indent=0):
         ...     data,
         ...     indent=4
         ...     )
-        >>> print p
+        >>> print(p)
         {
             'a': 1,
             'b': 'hi',
@@ -93,7 +96,7 @@ def pretty(object, indent=0, base_indent=0):
         }
 
         >>> p1 = eval(p)
-        >>> print pretty(p1, indent=4)
+        >>> print(pretty(p1, indent=4))
         {
             'a': 1,
             'b': 'hi',
@@ -163,7 +166,10 @@ def pretty(object, indent=0, base_indent=0):
             try:
                 log('unable to pretty print object: %r' % type(object))
                 p = repr(object)
-                log('object len: %d' % len(str(p)))
+                if IS_PY2:
+                    log('object len: %d' % len(str(p)))
+                else:
+                    log('object len: %d' % len('{}'.format(p)))
             except:
                 log(format_exc())
                 from syr.python import last_exception_only
@@ -174,23 +180,23 @@ def pretty(object, indent=0, base_indent=0):
 def add_commas(number):
     ''' Add commas to a number,
 
-        >>> print add_commas(0)
+        >>> print(add_commas(0))
         0
-        >>> print add_commas(1)
+        >>> print(add_commas(1))
         1
-        >>> print add_commas(1234)
+        >>> print(add_commas(1234))
         1,234
-        >>> print add_commas(1234567)
+        >>> print(add_commas(1234567))
         1,234,567
-        >>> print add_commas(0.0)
+        >>> print(add_commas(0.0))
         0.0
-        >>> print add_commas(0.1234)
+        >>> print(add_commas(0.1234))
         0.1234
-        >>> print add_commas(1.1234)
+        >>> print(add_commas(1.1234))
         1.1234
-        >>> print add_commas(1234.1234)
+        >>> print(add_commas(1234.1234))
         1,234.1234
-        >>> print add_commas(1234567.1234)
+        >>> print(add_commas(1234567.1234))
         1,234,567.1234
     '''
 
@@ -215,11 +221,11 @@ def s_if_plural(number):
     ''' Return an empty string if the number is one, else return the letter \'s\'.
         This is used to form standard plural nouns.
 
-        >>> print 'house' + s_if_plural(0)
+        >>> print('house' + s_if_plural(0))
         houses
-        >>> print 'house' + s_if_plural(1)
+        >>> print('house' + s_if_plural(1))
         house
-        >>> print 'house' + s_if_plural(2)
+        >>> print('house' + s_if_plural(2))
         houses
 
     '''
